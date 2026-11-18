@@ -472,7 +472,7 @@ const KH=s=>{const d=new Date(s);return isNaN(d)?'':d.toLocaleString('ko-KR',{ti
 const KDT=s=>{const d=new Date(s);return isNaN(d)?'-':d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:false});};
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-const S={mode:'level',exag:4,playing:false,playT:null,rainFx:!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),src:'live',P:150,D:12,pat:'mid',water:true};
+const S={mode:'lc',exag:4,playing:false,playT:null,rainFx:!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),src:'live',P:150,D:12,pat:'mid',water:true};
 let LIVE=null, SCEN=null, A=new Map();
 const scen=()=>S.src==='scen';
 const src=()=>scen()?(SCEN||(SCEN=makeScen())):LIVE;
@@ -682,7 +682,7 @@ function drawLegend(){const L=$('#legend');
 // ---- controls ----
 function segment(el,items,key,cb){el.innerHTML=items.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${String(S[key])===String(v)}">${l}</button>`).join('');
   el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S[key]=b.dataset.v;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));cb();}));}
-segment($('#mode'),[['level','위험 단계'],['rain','강수량'],['lc','토지피복']],'mode',paint);
+segment($('#mode'),[['lc','토지피복'],['level','위험 단계'],['rain','강수량']],'mode',paint);
 $('#water').checked=S.water;$('#water').addEventListener('change',e=>{S.water=e.target.checked;paint();});
 const dsel=$('#dong');
 ['처인구','기흥구','수지구'].forEach(g=>{const og=document.createElement('optgroup');og.label=g;DATA.dongs.filter(d=>d.gu===g).sort((a,b)=>a.nm.localeCompare(b.nm,'ko')).forEach(d=>{const o=document.createElement('option');o.value=d.cd;o.textContent=d.nm;og.appendChild(o);});dsel.appendChild(og);});
