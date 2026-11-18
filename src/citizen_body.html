@@ -1,0 +1,110 @@
+<div class="app">
+  <header class="topbar">
+    <div class="tb-title">
+      <h1>용인 우리동네 비 알림</h1>
+      <span class="eyebrow">용인시 38개 읍면동 · 기상청 예보 기반</span>
+    </div>
+    <div class="chips">
+      <span class="chip" id="srcPill">기상청 자료 연결 대기 중</span>
+      <span class="chip lvchip l2" id="cnt2">경계 <b>-</b></span>
+      <span class="chip lvchip l1" id="cnt1">주의 <b>-</b></span>
+      <span class="chip lvchip l0" id="cnt0">평소 <b>-</b></span>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="mapbox" id="mapbox" aria-label="용인시 3D 지형 위험 단계 지도">
+      <div class="labels" id="labels"></div>
+      <div class="maptip" id="tip" hidden></div>
+      <div class="glmsg" id="glmsg" hidden>이 브라우저에서는 3D(WebGL)를 표시할 수 없습니다.</div>
+    </div>
+    <div class="hud" id="hud"></div>
+
+    <aside class="fpanel tools" aria-label="도구">
+      <section class="psec">
+        <h3>우리 동네</h3>
+        <select id="dong" aria-label="우리 동네 선택" class="dongsel"></select>
+        <p class="note" style="margin:0">고른 동네는 이 브라우저에 기억돼요. 지도에서 동을 눌러도 바뀌어요.</p>
+      </section>
+      <section class="psec">
+        <h3>강우 자료</h3>
+        <div class="seg seg-full" id="src"></div>
+        <div class="liveinfo" id="liveinfo"></div>
+        <div class="scenbox stack" id="scenbox" hidden>
+          <div class="presets" id="presets"></div>
+          <div class="rainrow">
+            <input type="range" id="P" min="10" max="400" step="10" value="150" aria-label="총 강우량">
+            <span class="big"><output id="oP">150</output><small> mm</small></span>
+          </div>
+          <div class="row">
+            <select id="D" aria-label="지속시간"><option value="1">1시간 동안</option><option value="3">3시간 동안</option><option value="6">6시간 동안</option><option value="12" selected>12시간 동안</option><option value="24">24시간 동안</option></select>
+            <select id="pat" aria-label="강우 패턴"><option value="mid" selected>가운데 집중</option><option value="front">초반 집중</option><option value="back">후반 집중</option><option value="uni">고르게</option></select>
+          </div>
+          <p class="note" style="margin:0">가상 강우를 용인 전체에 똑같이 내린다고 보고 계산해요. 동네마다 단계가 다른 건 토지피복(포장면·숲·논밭) 차이 때문이에요. 비는 2시간 뒤부터 시작해요.</p>
+        </div>
+      </section>
+      <section class="psec">
+        <h3>지도 표시</h3>
+        <div class="seg seg-full" id="mode"></div>
+        <div class="row">
+          <button type="button" class="btn" id="vObl">비스듬히</button>
+          <button type="button" class="btn" id="vTop">위에서</button>
+        </div>
+        <label class="row" for="exag"><span class="lab2">수직 과장</span><input type="range" id="exag" min="1" max="10" step="0.5" value="4"><output id="oEx">4×</output></label>
+        <div class="row">
+          <button type="button" class="btn primary" id="play" aria-pressed="false">▶ 24시간 재생</button>
+          <label class="chk" for="rainfx"><input type="checkbox" id="rainfx" checked> 비 효과</label>
+        </div>
+        <label class="chk" for="water"><input type="checkbox" id="water" checked> 빗물 흐름·고임 표시</label>
+        <div id="legend"></div>
+        <p class="note" style="margin:0">드래그 회전 · 우클릭 드래그 이동 · 휠 확대 · 동 클릭 선택</p>
+      </section>
+    </aside>
+
+    <aside class="fpanel side" aria-label="우리 동네 알림">
+      <div class="sidehead">
+        <div class="selname"><h2 id="selName">-</h2><span class="note" id="selGu" style="margin:0"></span></div>
+        <div class="tabs" role="tablist" id="tabs">
+          <button type="button" role="tab" data-tab="me" aria-selected="true">우리 동네</button>
+          <button type="button" role="tab" data-tab="rank" aria-selected="false">동네별 단계</button>
+          <button type="button" role="tab" data-tab="guide" aria-selected="false">행동 요령</button>
+        </div>
+      </div>
+      <div class="tabpane" data-pane="me">
+        <div class="status ln" id="status"></div>
+        <section class="panel">
+          <div class="phead"><h2>향후 24시간 시간별 비와 단계</h2></div>
+          <div class="timeline" id="timeline"></div>
+          <div class="hlabels" id="hlabels"></div>
+          <div class="lgd" style="margin-top:8px"><span><i style="background:var(--lv0b)"></i>평소</span><span><i style="background:var(--lv1)"></i>주의</span><span><i style="background:var(--lv2)"></i>경계</span><span>막대 높이 = 시간당 강수량</span></div>
+        </section>
+        <section class="panel">
+          <div class="phead"><h2 id="todoTitle">지금 이렇게 하세요</h2></div>
+          <ul class="todo" id="todo"></ul>
+        </section>
+        <section class="panel">
+          <div class="phead"><h2 id="placeTitle">주의 장소</h2></div>
+          <div id="places"></div>
+        </section>
+      </div>
+      <div class="tabpane" data-pane="rank" hidden>
+        <p class="note" style="margin:0 0 4px">위험 단계 → 최대 3시간 강수 순. 막대 = 최대 3시간 강수(mm)</p>
+        <div class="rank" id="rank"></div>
+      </div>
+      <div class="tabpane" data-pane="guide" hidden>
+        <div id="guideAll"></div>
+        <section class="panel">
+          <div class="phead"><h2>단계는 이렇게 정해요</h2></div>
+          <div class="crit">
+            <div><b class="t1">주의</b> 향후 24시간 안에 3시간 60mm 또는 12시간 110mm 이상 비 예보 (기상청 호우주의보 수준), 또는 예상 유출고 30mm 이상</div>
+            <div><b class="t2">경계</b> 3시간 90mm 또는 12시간 180mm 이상 (호우경보 수준), 또는 예상 유출고 60mm 이상</div>
+            <div>유출고는 동네 토지피복(아스팔트·건물·숲·논밭)에 따라 빗물이 스며들지 못하고 흘러나오는 양이에요 (SCS-CN, 토양군 C 가정). 유출고 기준은 과거 침수 기록으로 보정하기 전의 임시값입니다.</div>
+          </div>
+        </section>
+        <p class="note">참고용 정보이며 공식 특보·재난문자를 대신하지 않아요. 긴급 상황은 119.</p>
+      </div>
+    </aside>
+
+    <div class="statbar" id="statbar" aria-label="용인시 통계"></div>
+  </div>
+</div>

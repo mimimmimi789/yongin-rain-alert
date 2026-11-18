@@ -1,0 +1,338 @@
+const DATA = __DATA__;
+(function(){
+const $=s=>document.querySelector(s);
+const LC={
+ '110':['#e4877c',83], '120':['#b8607a',91], '130':['#d0453c',94], '140':['#eeb15c',79], '150':['#8f8f8f',98], '160':['#a77fb6',90],
+ '210':['#f3e27a',82], '220':['#e1c45b',85], '230':['#cfe9a2',90], '240':['#bba05a',76], '250':['#ead7a0',82],
+ '310':['#6fb04f',70], '320':['#2f6e2c',70], '330':['#4c8f3c',70], '410':['#b2d68f',71], '420':['#93c06d',74],
+ '510':['#68b0b4',85], '610':['#d6c4a4',91], '620':['#b39a7c',91], '710':['#4a8fcc',98]
+};
+const LVC=['#4f9e6e','#e0a224','#cf3b26'];
+const LVN=['평소','주의','경계'];
+const GU={'31191':'처인구','31192':'기흥구','31193':'수지구'};
+DATA.dongs.forEach(d=>d.gu=GU[d.cd.slice(0,5)]||'');
+const fmt=(v,d=0)=>Number(v).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const scs=(P,cn)=>{const s=25400/cn-254,ia=.2*s;return P>ia?(P-ia)*(P-ia)/(P-ia+s):0;};
+function runoff(area,P){let A=0,V=0;for(const c in area){if(!LC[c])continue;A+=area[c];V+=scs(P,LC[c][1])*area[c];}return A?V/A:0;}
+const KH=s=>{const d=new Date(s);return isNaN(d)?'':d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'numeric',hour12:false}).replace(/\s*시$/,'')+'시';};
+const KDT=s=>{const d=new Date(s);return isNaN(d)?'-':d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:false});};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const S={mode:'level',exag:4,playing:false,playT:null,rainFx:!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),src:'live',P:150,D:12,pat:'mid',water:true};
+let LIVE=null, SCEN=null, A=new Map();
+const scen=()=>S.src==='scen';
+const src=()=>scen()?(SCEN||(SCEN=makeScen())):LIVE;
+function shape(p,D){const w=[];for(let i=0;i<D;i++){const x=(i+.5)/D,g=(c,s)=>Math.exp(-(((x-c)/s)**2));w.push(p==='uni'?1:p==='front'?g(.22,.2)+.06:p==='back'?g(.78,.2)+.06:g(.45,.2)+.06);}const s=w.reduce((a,b)=>a+b,0);return w.map(v=>v/s);}
+function makeScen(){
+  const now=new Date();now.setMinutes(0,0,0);
+  const times=[...Array(24)].map((_,i)=>new Date(now.getTime()+(i+1)*3600e3).toISOString());
+  const sh=shape(S.pat,S.D).map(v=>v*S.P), series=times.map((_,i)=>{const k=i-2;return k>=0&&k<sh.length?+sh[k].toFixed(2):0;});
+  const dongs={};DATA.dongs.forEach(d=>dongs[d.cd]=series);
+  return {times,dongs,updated:now.toISOString(),obs:{dongs:{}}};
+}
+let sel=null; try{sel=localStorage.getItem('yongin-dong');}catch(e){}
+S.sel=DATA.dongs.find(d=>d.cd===sel)||DATA.dongs.find(d=>d.nm==='구갈동')||DATA.dongs[0];
+
+function assess(d){
+  const X=src(); if(!X) return null;
+  const a=(X.dongs[d.cd]||[]).slice(0,24).map(v=>v==null?0:+v), n=a.length;
+  const roll=(w,i)=>{let s=0;for(let k=Math.max(0,i-w+1);k<=i;k++)s+=a[k];return s;};
+  let r3=0,i3=0,r12=0;const hl=[];
+  for(let i=0;i<n;i++){const x=roll(3,i),y=roll(12,i),q=runoff(d.area,y);if(x>r3){r3=x;i3=i;}if(y>r12)r12=y;hl.push(x>=90||y>=180||q>=60?2:x>=60||y>=110||q>=30?1:0);}
+  const tot=a.reduce((p,v)=>p+v,0);
+  return {a,n,hl,lv:Math.max(0,...hl),r3,i3,r12,tot,q:runoff(d.area,r12),first:hl.findIndex(v=>v>=1),times:(X.times||[]).slice(0,24)};
+}
+function recompute(){A=new Map();DATA.dongs.forEach(d=>A.set(d,assess(d)));}
+const lvAt=(d)=>{const x=A.get(d);if(!x)return -1;if(S.playT==null)return x.lv;return x.hl[Math.min(x.n-1,Math.floor(S.playT))]??0;};
+const cumAt=(arr,t)=>{if(t==null)return arr.reduce((p,v)=>p+v,0);const h=Math.floor(t);let p=0;for(let i=0;i<h&&i<arr.length;i++)p+=arr[i];if(h<arr.length)p+=arr[h]*(t-h);return p;};
+const dongArea=d=>{let s=0;for(const c in d.area)s+=d.area[c];return s;};
+function citySeries(){const out=new Array(24).fill(0);let At=0;DATA.dongs.forEach(d=>{const x=A.get(d);if(!x)return;const Ar=dongArea(d);At+=Ar;x.a.forEach((v,i)=>out[i]+=v*Ar);});return At?out.map(v=>v/At):[];}
+
+// ---- 3D ----
+const box=$('#mapbox'), TW=DATA.W, TH=DATA.H;
+const tex=document.createElement('canvas'); tex.width=TW; tex.height=TH; const tctx=tex.getContext('2d');
+let cls=null,dongR=null,imgData=null;
+const dongPaths=DATA.dongs.map(d=>new Path2D(d.d));
+const RAMP=['#f2f7d9','#c7e6b4','#7fcdbb','#41b6c4','#1d91c0','#225ea8','#253494','#081d58'];
+const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const RAMPc=RAMP.map(hex);
+function rampColor(t){t=Math.max(0,Math.min(1,t));const x=t*(RAMPc.length-1),i=Math.min(RAMPc.length-2,Math.floor(x)),f=x-i;return RAMPc[i].map((v,k)=>Math.round(v+(RAMPc[i+1][k]-v)*f));}
+const mix=(a,b,t)=>a.map((v,k)=>Math.round(v*(1-t)+b[k]*t));
+const rMax=()=>{let m=0;A.forEach(x=>{if(x)m=Math.max(m,x.tot);});return Math.max(20,Math.ceil(m/20)*20);};
+const PLAY_SEC=16;
+function paint(){
+  drawLegend();
+  if(!cls) return;
+  const base=hex(css('--terrain')||'#c9cdc3'), none=hex('#b9c0c4');
+  const lcC=DATA.codes.map(c=>hex(LC[c][0])), rm=rMax();
+  const T=[[base,...lcC.map(()=>base)]];
+  DATA.dongs.forEach(d=>{
+    const x=A.get(d);
+    if(S.mode==='lc'){T.push([base,...lcC]);return;}
+    if(S.mode==='rain'){const P=x?cumAt(x.a,S.playT):0;const c=x?rampColor(P/rm):none;T.push([base,...lcC.map(l=>mix(c,l,.18))]);return;}
+    const lv=lvAt(d), c=lv<0?none:hex(LVC[lv]);
+    T.push([base,...lcC.map(l=>mix(c,l,lv===0?.32:.2))]);
+  });
+  const dd=imgData.data;
+  if(S.water&&!FLOW&&cls) buildFlow();
+  const WF=S.mode==='rain'?null:waterField(), p2c=FLOW&&FLOW.p2c, WC=[38,104,178], WD=[18,64,128];
+  for(let i=0;i<cls.length;i++){let l=T[dongR[i]][cls[i]];
+    if(WF&&dongR[i]){const t=WF[p2c[i]];if(t>0.02){const c=mix(WC,WD,t);l=mix(l,c,Math.min(.92,.35+.6*t));}}
+    const j=i*4;dd[j]=l[0];dd[j+1]=l[1];dd[j+2]=l[2];dd[j+3]=255;}
+  tctx.putImageData(imgData,0,0);
+  tctx.lineJoin='round'; tctx.strokeStyle='rgba(18,30,40,.7)'; tctx.lineWidth=2.4; dongPaths.forEach(p=>tctx.stroke(p));
+  const i=DATA.dongs.indexOf(S.sel); if(i>=0){tctx.strokeStyle='#ffffff';tctx.lineWidth=12;tctx.stroke(dongPaths[i]);tctx.strokeStyle='#14232e';tctx.lineWidth=6;tctx.stroke(dongPaths[i]);}
+  if(three){three.texture.needsUpdate=true;three.render();}
+}
+const img=new Image();
+img.onload=()=>{const o=document.createElement('canvas');o.width=TW;o.height=TH;const c=o.getContext('2d');c.drawImage(img,0,0);
+  const raw=c.getImageData(0,0,TW,TH).data;cls=new Uint8Array(TW*TH);dongR=new Uint8Array(TW*TH);
+  for(let i=0;i<cls.length;i++){cls[i]=raw[i*4];dongR[i]=raw[i*4+1];}
+  imgData=tctx.createImageData(TW,TH);paint();};
+img.src='data:image/png;base64,'+DATA.png;
+const DEM=DATA.dem;
+const zArr=new Uint16Array(Uint8Array.from(atob(DEM.b64),c=>c.charCodeAt(0)).buffer);
+const SX=DATA.sizeM[0]/1000, SY=DATA.sizeM[1]/1000;
+const elevAt=(cx,cy)=>{const gx=Math.round(cx/TW*(DEM.w-1)),gy=Math.round(cy/TH*(DEM.h-1));return zArr[gy*DEM.w+gx]/10;};
+// ---- 빗물 흐름: DEM 웅덩이 채움(priority-flood) + D8 흐름 누적 ----
+const NC=DEM.w*DEM.h, CELL=(DATA.sizeM[0]/(DEM.w-1))*(DATA.sizeM[1]/(DEM.h-1));
+let FLOW=null;
+function buildFlow(){
+  const w=DEM.w,h=DEM.h,z=new Float32Array(NC);for(let i=0;i<NC;i++)z[i]=zArr[i]/10;
+  const fz=new Float32Array(NC),done=new Uint8Array(NC),rcv=new Int32Array(NC).fill(-1),order=new Int32Array(NC);let on=0;
+  // binary heap on fz
+  const hp=new Int32Array(NC);let hn=0;
+  const up=k=>{const v=hp[k];while(k>0){const p=(k-1)>>1;if(fz[hp[p]]<=fz[v])break;hp[k]=hp[p];k=p;}hp[k]=v;};
+  const down=k=>{const v=hp[k];for(;;){let c=2*k+1;if(c>=hn)break;if(c+1<hn&&fz[hp[c+1]]<fz[hp[c]])c++;if(fz[hp[c]]>=fz[v])break;hp[k]=hp[c];k=c;}hp[k]=v;};
+  const push=i=>{hp[hn]=i;up(hn++);};const pop=()=>{const r=hp[0];hp[0]=hp[--hn];if(hn)down(0);return r;};
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(x===0||y===0||x===w-1||y===h-1){const i=y*w+x;fz[i]=z[i];done[i]=1;push(i);}
+  const DX=[-1,0,1,-1,1,-1,0,1],DY=[-1,-1,-1,0,0,1,1,1];
+  while(hn){const i=pop();order[on++]=i;const x=i%w,y=(i/w)|0;
+    for(let k=0;k<8;k++){const nx=x+DX[k],ny=y+DY[k];if(nx<0||ny<0||nx>=w||ny>=h)continue;const j=ny*w+nx;if(done[j])continue;
+      done[j]=1;fz[j]=Math.max(z[j],fz[i]+1e-3);rcv[j]=i;push(j);}}
+  // 셀별 토지피복·동 (텍스처에서 표본)
+  const cc=new Uint8Array(NC),cd=new Uint8Array(NC);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const px=Math.min(TW-1,Math.round(x/(w-1)*(TW-1))),py=Math.min(TH-1,Math.round(y/(h-1)*(TH-1)));const p=py*TW+px;cc[y*w+x]=cls[p];cd[y*w+x]=dongR[p];}
+  const pond=new Float32Array(NC);for(let i=0;i<NC;i++)pond[i]=fz[i]-z[i];
+  // 텍스처 픽셀 → 셀
+  const p2c=new Int32Array(TW*TH);for(let py=0;py<TH;py++){const gy=Math.round(py/(TH-1)*(h-1));for(let px=0;px<TW;px++)p2c[py*TW+px]=gy*w+Math.round(px/(TW-1)*(w-1));}
+  FLOW={rcv,order,cc,cd,pond,p2c};
+}
+let WCACHE={key:null,W:null,vol:0};
+function waterField(){
+  const X=src(); if(!X||!FLOW||!S.water) return null;
+  const key=(scen()?'s'+S.P+'/'+S.D+'/'+S.pat:'l'+(LIVE&&LIVE.updated))+'@'+(S.playT==null?'all':Math.floor(S.playT));
+  if(WCACHE.key===key) return WCACHE.W;
+  const {rcv,order,cc,cd,pond}=FLOW, acc=new Float64Array(NC);
+  const Pd=DATA.dongs.map(d=>{const x=A.get(d);return x?cumAt(x.a,S.playT):0;});
+  const cnC=[0,...DATA.codes.map(c=>LC[c][1])];
+  let vol=0;
+  for(let i=0;i<NC;i++){const di=cd[i],ci=cc[i];if(!di||!ci)continue;const v=scs(Pd[di-1],cnC[ci])/1000*CELL;acc[i]=v;vol+=v;}
+  for(let k=NC-1;k>=0;k--){const i=order[k],r=rcv[i];if(r>=0)acc[r]+=acc[i];}
+  const W=new Float32Array(NC),lo=Math.log10(4e4),hi=Math.log10(2e7);
+  for(let i=0;i<NC;i++){if(!cd[i])continue;const a=acc[i];let t=a>4e4?(Math.log10(a)-lo)/(hi-lo):0;
+    if(pond[i]>1&&a>0){t=Math.max(t,Math.min(1,a/(pond[i]*CELL*4))*0.9);} // 웅덩이(저지대)에 고이는 물
+    W[i]=Math.min(1,t);}
+  // 큰 물길일수록 옆으로 번지게 (2회 팽창)
+  const w=DEM.w;for(let it=0;it<2;it++){const W2=W.slice();for(let i=w+1;i<NC-w-1;i++){let m=W[i];const n=[W[i-1],W[i+1],W[i-w],W[i+w]];for(const q of n){const s=q*0.82-0.12;if(s>m)m=s;}W2[i]=m;}W.set(W2);}
+  WCACHE={key,W,vol};return W;
+}
+const labelEls=DATA.dongs.map(d=>{const e=document.createElement('span');e.className='lab';e.textContent=d.nm;$('#labels').appendChild(e);return e;});
+
+const rainClass=I=>I<=0?'비 없음':I<3?'약한 비':I<15?'보통 비':I<30?'강한 비':'매우 강한 비';
+const avgI=()=>{const c=citySeries();return c.length?c.reduce((a,b)=>a+b,0)/c.length:0;};
+function hud(I){const el=$('#hud');const X=src();
+  if(!X){el.innerHTML='<div class="ht">기상청 예보 대기 중</div>';return;}
+  const pt=S.playT;
+  el.innerHTML=(pt!=null?`<div class="ht">재생 ${KH(X.times[Math.min(23,Math.floor(pt))])} · ${Math.floor(pt)+1}/24시간</div>`:`<div class="ht">향후 24시간 용인 평균</div>`)+
+   `<div class="hv"><b>${fmt(I,1)}</b> mm/h <span class="rc rc${I<3?0:I<15?1:I<30?2:3}">${rainClass(I)}</span></div>`+
+   (S.water&&WCACHE.W?`<div class="ht">빗물 유출량 합계 <b style="color:var(--ink)">${fmt(WCACHE.vol/1e4,WCACHE.vol<1e5?1:0)}</b>만 m³</div>`:'')+
+   (pt!=null?`<div class="pb"><i style="width:${(pt/24*100).toFixed(1)}%"></i></div>`:'');}
+
+let three=null;
+function initThree(){
+  if(!window.THREE){$('#glmsg').hidden=false;return;}
+  let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});}catch(e){$('#glmsg').hidden=false;return;}
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  box.insertBefore(renderer.domElement,box.firstChild);
+  const scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(38,1,0.1,600);
+  const geo=new THREE.PlaneGeometry(SX,SY,DEM.w-1,DEM.h-1);
+  const texture=new THREE.CanvasTexture(tex);texture.minFilter=THREE.LinearFilter;texture.generateMipmaps=false;texture.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  const mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({map:texture}));mesh.rotation.x=-Math.PI/2;scene.add(mesh);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x5a6470,0.62));
+  const sun=new THREE.DirectionalLight(0xffffff,0.62);sun.position.set(-25,22,-30);scene.add(sun);
+  const controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.maxPolarAngle=Math.PI*0.47;controls.minDistance=6;controls.maxDistance=140;controls.target.set(0,0,0);
+  function applyZ(){const pos=geo.attributes.position;for(let i=0;i<pos.count;i++)pos.setZ(i,(zArr[i]/10-DEM.min)/1000*S.exag);pos.needsUpdate=true;geo.computeVertexNormals();geo.computeBoundingSphere();}
+  const v=new THREE.Vector3();
+  function render(){
+    renderer.render(scene,camera);
+    const show=box.clientWidth>520,w=box.clientWidth,h=box.clientHeight;
+    DATA.dongs.forEach((d,i)=>{const e=labelEls[i];if(!show){e.hidden=true;return;}
+      v.set((d.cx/TW-.5)*SX,(elevAt(d.cx,d.cy)-DEM.min)/1000*S.exag+.15,(d.cy/TH-.5)*SY).project(camera);
+      if(v.z>1){e.hidden=true;return;}e.hidden=false;e.style.transform=`translate(${((v.x+1)/2*w).toFixed(1)}px,${((1-v.y)/2*h).toFixed(1)}px) translate(-50%,-50%)`;
+      e.classList.toggle('on',S.sel===d);});
+  }
+  function overlay(){const w=box.clientWidth;if(window.innerWidth<=1000)return {L:0,R:0,B:0,k:1};
+    const st=box.getBoundingClientRect(),tl=$('.tools').getBoundingClientRect(),sd=$('.side').getBoundingClientRect(),sb=$('#statbar').getBoundingClientRect();
+    const L=tl.right-st.left,Rr=st.right-sd.left,B=st.bottom-sb.top;return {L,R:Rr,B,k:Math.min(1.9,Math.max(1,w/Math.max(200,w-L-Rr)))};}
+  function view(kind){const k=overlay().k;if(kind==='top')camera.position.set(0,SY*1.35*k,0.01);else camera.position.set(-SX*0.04,SY*0.58*k,SY*0.88*k);controls.target.set(0,0,0);controls.update();render();}
+  function resize(){const w=box.clientWidth,h=box.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;
+    const o=overlay();if(o.L||o.R)camera.setViewOffset(w,h,(o.R-o.L)/2,o.B/2,w,h);else camera.clearViewOffset();camera.updateProjectionMatrix();render();}
+  controls.addEventListener('change',render);
+  applyZ();resize();view('obl');new ResizeObserver(resize).observe(box);
+  const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+  function pick(e){const r=renderer.domElement.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(ndc,camera);const h=ray.intersectObject(mesh)[0];if(!h||!dongR)return -1;const px=Math.min(TW-1,Math.floor(h.uv.x*TW)),py=Math.min(TH-1,Math.floor((1-h.uv.y)*TH));return dongR[py*TW+px]-1;}
+  let down=null,raf=0;
+  renderer.domElement.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY];});
+  renderer.domElement.addEventListener('pointerup',e=>{if(down&&Math.hypot(e.clientX-down[0],e.clientY-down[1])<5){const i=pick(e);if(i>=0)choose(DATA.dongs[i]);}down=null;});
+  renderer.domElement.addEventListener('pointermove',e=>{if(e.buttons){$('#tip').hidden=true;return;}cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{const i=pick(e);if(i>=0)tipShow(e,DATA.dongs[i]);else $('#tip').hidden=true;renderer.domElement.style.cursor=i>=0?'pointer':'grab';});});
+  renderer.domElement.addEventListener('pointerleave',()=>$('#tip').hidden=true);
+  $('#vObl').addEventListener('click',()=>view('obl'));
+  $('#vTop').addEventListener('click',()=>view('top'));
+  $('#exag').addEventListener('input',e=>{S.exag=+e.target.value;$('#oEx').textContent=S.exag+'×';applyZ();render();});
+  const NMAX=8000,rp=new Float32Array(NMAX*6),rv=new Float32Array(NMAX),TOP=()=>2.5+S.exag*0.7;
+  for(let i=0;i<NMAX;i++){rp[i*6]=(Math.random()-.5)*SX;rp[i*6+2]=(Math.random()-.5)*SY;rp[i*6+1]=Math.random()*TOP();rv[i]=.75+Math.random()*.5;}
+  const rgeo=new THREE.BufferGeometry();rgeo.setAttribute('position',new THREE.BufferAttribute(rp,3));rgeo.setDrawRange(0,0);
+  const rain=new THREE.LineSegments(rgeo,new THREE.LineBasicMaterial({color:0x5b8fc4,transparent:true,opacity:.6,depthWrite:false}));rain.frustumCulled=false;scene.add(rain);
+  function stepRain(dt,I){const n=I>0?Math.max(60,Math.round(NMAX*Math.min(1,Math.sqrt(I/50)))):0;rgeo.setDrawRange(0,n*2);
+    const sp=(5+Math.min(I,80)*0.12)*dt,len=0.1+Math.min(I,60)*0.007,top=TOP();
+    for(let i=0;i<n;i++){const k=i*6;let y=rp[k+1]-sp*rv[i];if(y<0){y=top*(0.85+Math.random()*0.15);rp[k]=(Math.random()-.5)*SX;rp[k+2]=(Math.random()-.5)*SY;}
+      rp[k+1]=y;rp[k+3]=rp[k]+len*0.12;rp[k+4]=y+len;rp[k+5]=rp[k+2];}
+    rgeo.attributes.position.needsUpdate=true;}
+  let last=performance.now(),lastQ=-1,playT=0,looping=false;
+  function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;let I=avgI();
+    if(S.playing){playT+=dt*24/PLAY_SEC;
+      if(playT>=24){S.playing=false;S.playT=null;lastQ=-1;setPlayBtn();paint();renderStats();}
+      else{S.playT=playT;I=citySeries()[Math.floor(playT)]||0;const q=Math.floor(playT*2);if(q!==lastQ){lastQ=q;paint();renderStats();}}}
+    if(S.rainFx)stepRain(dt,I);else rgeo.setDrawRange(0,0);
+    hud(I);render();
+    if(S.rainFx||S.playing)requestAnimationFrame(frame);else looping=false;}
+  function kick(){if(!looping){looping=true;last=performance.now();requestAnimationFrame(frame);}}
+  function setPlayBtn(){$('#play').textContent=S.playing?'■ 정지':'▶ 24시간 재생';$('#play').setAttribute('aria-pressed',S.playing);}
+  $('#play').addEventListener('click',()=>{if(!src())return;if(S.playing){S.playing=false;S.playT=null;paint();renderStats();}else{S.playing=true;playT=0;lastQ=-1;S.playT=0;}setPlayBtn();kick();});
+  $('#rainfx').checked=S.rainFx;
+  $('#rainfx').addEventListener('change',e=>{S.rainFx=e.target.checked;if(!S.rainFx){rgeo.setDrawRange(0,0);render();}kick();});
+  three={texture,render,kick,stop(){S.playing=false;S.playT=null;setPlayBtn();}};
+  kick();if(cls)paint();
+}
+function tipShow(e,d){const x=A.get(d),t=$('#tip'),lv=lvAt(d);
+  t.innerHTML=`<div><b style="font-family:var(--f-body);font-weight:600">${d.gu} ${d.nm}</b> ${x?`<span class="lvtag l${lv}">${LVN[lv]}</span>`:''}</div>`+(x?`<div>24시간 <b>${fmt(x.tot,1)}</b> mm · 최대 3시간 <b>${fmt(x.r3,1)}</b> mm</div>`:'<div>예보 대기 중</div>');
+  t.hidden=false;const r=box.getBoundingClientRect();let X=e.clientX-r.left+14,Y=e.clientY-r.top+14;if(X+t.offsetWidth>r.width)X=e.clientX-r.left-t.offsetWidth-14;if(Y+t.offsetHeight>r.height)Y=e.clientY-r.top-t.offsetHeight-14;t.style.left=X+'px';t.style.top=Y+'px';}
+function drawLegend(){const L=$('#legend');
+  const wl=S.water?`<div class="ramp" style="margin-top:8px"><span>빗물이 모이는 곳 (흐름 누적 유출량)</span><div class="g" style="background:linear-gradient(90deg,rgba(38,104,178,.25),#2668b2,#124080)"></div><div class="t"><span>적음</span><span>물길·저지대</span></div></div>`:'';
+  if(S.mode==='lc'){L.innerHTML=wl+'<div class="legend">'+DATA.codes.map(c=>`<span><i style="background:${LC[c][0]}"></i>${DATA.names[c]}</span>`).join('')+'</div>';return;}
+  if(S.mode==='rain'){const m=rMax();L.innerHTML=`<div class="ramp"><span>${S.playT!=null?'재생 시점까지 누적':'향후 24시간 누적'} 강수량 (mm)</span><div class="g" style="background:linear-gradient(90deg,${RAMP.join(',')})"></div><div class="t"><span>0</span><span>${m/2}</span><span>${m}+</span></div></div>`;return;}
+  L.innerHTML=wl+'<div class="legend" style="margin-top:8px">'+LVN.map((n,i)=>`<span><i style="background:${LVC[i]}"></i>${n}</span>`).join('')+'<span><i style="background:#b9c0c4"></i>자료 없음</span></div>'+`<p class="note" style="margin:6px 0 0">${S.playT!=null?'재생 중인 시각의 단계':'향후 24시간 중 가장 높은 단계'}</p>`;}
+
+// ---- controls ----
+function segment(el,items,key,cb){el.innerHTML=items.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${String(S[key])===String(v)}">${l}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S[key]=b.dataset.v;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));cb();}));}
+segment($('#mode'),[['level','위험 단계'],['rain','강수량'],['lc','토지피복']],'mode',paint);
+$('#water').checked=S.water;$('#water').addEventListener('change',e=>{S.water=e.target.checked;paint();});
+const dsel=$('#dong');
+['처인구','기흥구','수지구'].forEach(g=>{const og=document.createElement('optgroup');og.label=g;DATA.dongs.filter(d=>d.gu===g).sort((a,b)=>a.nm.localeCompare(b.nm,'ko')).forEach(d=>{const o=document.createElement('option');o.value=d.cd;o.textContent=d.nm;og.appendChild(o);});dsel.appendChild(og);});
+dsel.addEventListener('change',()=>choose(DATA.dongs.find(d=>d.cd===dsel.value)));
+function choose(d){S.sel=d;dsel.value=d.cd;try{localStorage.setItem('yongin-dong',d.cd);}catch(e){}paint();renderSide();renderRank();if(three)three.render();}
+segment($('#src'),[['live','기상청 실시간'],['scen','호우 시나리오']],'src',()=>{if(three)three.stop();update();});
+const PRESETS=[['많은 비',60,6,'mid','6시간 60mm'],['장마 하루',120,24,'uni','24시간 120mm'],['주의보급',70,3,'mid','3시간 70mm'],['경보급',100,3,'mid','3시간 100mm'],['하루 폭우',200,24,'mid','24시간 200mm'],['극한호우',300,12,'front','12시간 300mm']];
+function drawPresets(){$('#presets').innerHTML=PRESETS.map(([n,P,D,p,t],i)=>`<button type="button" data-i="${i}" title="${t}" aria-pressed="${S.P===P&&S.D===D&&S.pat===p}">${n}<small>${t}</small></button>`).join('');
+  $('#presets').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const [,P,D,p]=PRESETS[+b.dataset.i];S.P=P;S.D=D;S.pat=p;syncScen();}));}
+function syncScen(){$('#P').value=S.P;$('#oP').textContent=S.P;$('#D').value=S.D;$('#pat').value=S.pat;SCEN=null;if(three)three.stop();drawPresets();update();}
+$('#P').addEventListener('input',e=>{S.P=+e.target.value;syncScen();});
+$('#D').addEventListener('change',e=>{S.D=+e.target.value;syncScen();});
+$('#pat').addEventListener('change',e=>{S.pat=e.target.value;syncScen();});
+drawPresets();
+
+// ---- side ----
+const TODO=[
+  ['외출 전 우산과 기상청 예보를 확인하세요','비가 시작되면 하천변 산책은 짧게 하세요','집 앞 빗물받이에 덮개나 쓰레기가 없는지 봐 두세요'],
+  ['하천변 산책로·둔치 주차장 이용을 자제하고, 둔치에 세운 차는 미리 옮기세요','지하 주차장·반지하 출입구 주변 배수 상태를 확인하세요','저지대 도로와 지하차도는 물이 고이기 시작하면 우회하세요','재난문자와 용인시 안내를 확인하세요'],
+  ['하천변·계곡·징검다리에 가까이 가지 마세요','지하차도·지하 주차장 진입을 피하고, 물이 차오르면 차를 두고 높은 곳으로 이동하세요','반지하 주택은 귀중품을 올리고 대피 준비를 하세요','위험하면 바로 119에 신고하세요'],
+];
+// 행정안전부 생활안전지도 둔치주차장(IF_0104) 2026-11-18 조회, 용인시 sig_cd 4146x 3건 = 보정2 공영주차장 출입구 구역 3곳
+const DUNCHI=[{dong:'보정동',nm:'보정2 공영주차장 (탄천 둔치)',river:'탄천',spaces:220,risk:'1등급',parts:3}];
+const IC={
+  river:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8c3-2 5 2 8 0s5-2 8 0 4 0 4 0M2 13c3-2 5 2 8 0s5-2 8 0 4 0 4 0M2 18c3-2 5 2 8 0s5-2 8 0 4 0 4 0"/></svg>',
+  park:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M10 17V8h3a3 3 0 0 1 0 6h-3"/></svg>',
+  tunnel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20V12a9 9 0 0 1 18 0v8M7 20v-6a5 5 0 0 1 10 0v6"/></svg>',
+};
+function renderSide(){
+  const d=S.sel,x=A.get(d);
+  $('#selName').textContent=d.nm;$('#selGu').textContent=d.gu;
+  const st=$('#status');
+  if(!x){st.className='status ln';st.innerHTML=`<div class="st-top"><span class="badge">대기</span></div><div class="st-msg">아직 기상청 예보가 들어오지 않았어요</div><div class="st-why">매시간 자동으로 받아와요. 왼쪽 '호우 시나리오'로 큰 비가 올 때 모습을 먼저 볼 수 있어요.</div>`;
+    $('#timeline').innerHTML='';$('#hlabels').innerHTML='';}
+  else{
+    st.className='status l'+x.lv;
+    const when=x.first>=0?`${KH(x.times[x.first])}부터 `:'';
+    const msg=x.lv===2?`${when}큰 비 경계, 하천과 지하 공간을 피하세요`:x.lv===1?`${when}많은 비 주의, 하천변 이용을 자제하세요`:x.tot>=1?'비 소식은 있지만 큰 위험은 없어요':'향후 24시간 비 소식이 거의 없어요';
+    const peak=x.r3>=1?`가장 강한 3시간은 ${KH(x.times[Math.max(0,x.i3-2)])}~${KH(x.times[x.i3])} 무렵 ${fmt(x.r3,0)}mm예요.`:'';
+    st.innerHTML=`<div class="st-top"><span class="badge">${LVN[x.lv]}</span><span class="st-place">${d.nm}</span></div><div class="st-msg">${msg}</div>${peak?`<div class="st-why">${peak}</div>`:''}
+      <div class="facts"><div class="fact"><div class="k">24시간 강수</div><div class="v">${fmt(x.tot,x.tot<10?1:0)}<small>mm</small></div></div><div class="fact"><div class="k">최대 3시간</div><div class="v">${fmt(x.r3,x.r3<10?1:0)}<small>mm</small></div></div><div class="fact"><div class="k">예상 유출고</div><div class="v">${fmt(x.q,x.q<10?1:0)}<small>mm</small></div></div></div>`;
+    const mx=Math.max(10,...x.a);
+    const bl=x.a.map((_,i)=>Math.max(...x.hl.slice(i,Math.min(x.n,i+3))));
+    $('#timeline').innerHTML=x.a.map((v,i)=>`<div class="hb" title="${KH(x.times[i])} ${fmt(v,1)}mm · ${LVN[bl[i]]}"><i class="l${bl[i]}" style="height:${(v/mx*100).toFixed(1)}%"></i></div>`).join('');
+    $('#hlabels').innerHTML=x.a.map((v,i)=>`<span>${i%3===0?KH(x.times[i]):''}</span>`).join('');
+  }
+  const lv=x?x.lv:0;
+  $('#todoTitle').textContent=x?`지금 이렇게 하세요 · ${LVN[lv]}`:'평소 행동 요령';
+  $('#todo').innerHTML=TODO[lv].map((t,i)=>`<li><b>${i+1}</b><span>${t}</span></li>`).join('');
+  const water=((d.area['710']||0)+(d.area['510']||0))/1e4, warn=lv>=1;
+  $('#placeTitle').textContent=`${d.nm} 주의 장소`;
+  const rows=[water>=3?['river','하천·수변 구역',`동 안에 하천·습지가 약 ${fmt(water,0)}ha 있어요. ${warn?'지금은 하천변 산책로와 징검다리 이용을 피하세요.':'큰 비가 예보되면 가장 먼저 통제되는 곳이에요.'}`,false]:['river','하천·수변 구역','동 안에 큰 하천 구역은 적어요. 이웃 동 하천변 이동 시 주의하세요.',false],
+    (()=>{const p=DUNCHI.filter(q=>q.dong===d.nm);
+      if(p.length) return ['park','둔치 주차장',p.map(q=>`<b>${q.nm}</b> · ${q.river} · ${q.spaces}대 · 위험 ${q.risk} (출입구 구역 ${q.parts}곳). ${lv>=2?'지금 바로 차를 옮기세요. 둔치는 가장 먼저 잠겨요.':lv>=1?'비 오기 전에 차를 옮겨 두세요.':'큰 비 예보 때는 이용을 피하세요.'}`).join('<br>'),false];
+      return ['park','둔치 주차장',`이 동네에는 등록된 둔치 주차장이 없어요. 용인시 등록 1곳: ${DUNCHI.map(q=>q.nm+' ('+q.dong+')').join(', ')}.`,false];})(),
+    ['tunnel','지하차도','경기도 도로대장 지하차도 자료를 연결하면 동네 지하차도 목록을 보여드려요.',true]];
+  $('#places').innerHTML=rows.map(([ic,t,ds,p])=>`<div class="place"><div class="ic" style="color:${warn&&!p?LVC[lv]:'var(--muted)'}">${IC[ic]}</div><div><div class="t">${t}${p?'<span class="pend">자료 연결 예정</span>':''}</div><div class="d">${ds}</div></div></div>`).join('');
+  $('#guideAll').innerHTML=TODO.map((l,k)=>`<section class="panel"><div class="phead"><h2><span class="lvtag l${k}">${LVN[k]}</span> 단계</h2></div><ul class="todo">${l.map((t,i)=>`<li><b>${i+1}</b><span>${t}</span></li>`).join('')}</ul></section>`).join('');
+}
+function renderRank(){
+  const arr=DATA.dongs.map((d,i)=>({d,x:A.get(d)})).sort((a,b)=>((b.x?.lv??-1)-(a.x?.lv??-1))||((b.x?.r3||0)-(a.x?.r3||0))||a.d.nm.localeCompare(b.d.nm,'ko'));
+  const m=Math.max(30,...arr.map(a=>a.x?a.x.r3:0));
+  $('#rank').innerHTML=arr.map((a,k)=>{const lv=a.x?a.x.lv:-1;return `<button type="button" class="rk${S.sel===a.d?' sel':''}" data-cd="${a.d.cd}"><span class="n">${k+1}</span><span>${a.d.nm}</span><span class="track"><span class="fill" style="display:block;width:${a.x?Math.min(100,a.x.r3/m*100):0}%;background:${lv<0?'#b9c0c4':LVC[lv]}"></span></span><span class="val">${a.x?`<span class="lvtag l${lv}">${LVN[lv]}</span>`:'-'}</span></button>`;}).join('');
+  $('#rank').querySelectorAll('.rk').forEach(b=>b.addEventListener('click',()=>choose(DATA.dongs.find(d=>d.cd===b.dataset.cd))));
+}
+function renderStats(){
+  const X=src(), xs=DATA.dongs.map(d=>({d,x:A.get(d)}));
+  const c=[0,0,0];xs.forEach(({d,x})=>{if(x)c[lvAt(d)]++;});
+  ['0','1','2'].forEach(k=>$('#cnt'+k).querySelector('b').textContent=X?c[k]:'-');
+  const pill=$('#srcPill');
+  pill.className='chip'+(scen()?' demo':LIVE?' live':'');
+  pill.textContent=scen()?`호우 시나리오 · ${S.D}시간 ${S.P}mm (가상)`:LIVE?`● 기상청 실시간 · ${KDT(LIVE.updated)} 갱신`:'기상청 자료 연결 대기 중';
+  if(!X){$('#statbar').innerHTML='<div class="stat" style="grid-column:1/-1"><div class="k">기상청 예보</div><div class="v" style="font-family:var(--f-body);font-size:15px">자료 수집 대기 중</div><div class="s">매시간 자동 갱신</div></div>';return;}
+  const cs=citySeries(), tot=cs.reduce((a,b)=>a+b,0), mxh=Math.max(0,...cs);
+  const top=xs.filter(a=>a.x).sort((a,b)=>b.x.r3-a.x.r3)[0];
+  const early=xs.filter(a=>a.x&&a.x.first>=0).sort((a,b)=>a.x.first-b.x.first)[0];
+  const obs=Object.values(((X.obs||{}).dongs)||{}).filter(v=>v!=null), om=obs.length?obs.reduce((a,b)=>a+b,0)/obs.length:null;
+  const tiles=[
+    ['경계 동네',String(c[2]),'곳',S.playT!=null?'재생 시각 기준':'향후 24시간 최고 단계'],
+    ['주의 동네',String(c[1]),'곳','전체 38개 동 중'],
+    ['24시간 평균 강수',fmt(tot,1),'mm',`최대 ${fmt(mxh,1)} mm/h · ${rainClass(mxh)}`],
+    scen()?(()=>{const t=xs.filter(a=>a.x).sort((a,b)=>b.x.q-a.x.q)[0];return ['유출이 가장 큰 동',t?t.d.nm:'-','',t?`예상 유출고 ${fmt(t.x.q,1)} mm`:''];})():['가장 센 3시간',top?top.d.nm:'-','',top?`${fmt(top.x.r3,1)} mm`:''],
+    ['가장 빠른 주의',early?KH(early.x.times[early.x.first]):'없음','',early?early.d.nm:'24시간 안에 없음'],
+    ['직전 1시간 관측',om==null?'-':fmt(om,1),om==null?'':'mm',scen()?'시나리오에는 없음':'38개 동 평균 (초단기실황)'],
+  ];
+  $('#statbar').innerHTML=tiles.map(([k,v,u,s])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div><div class="s">${s}</div></div>`).join('');
+}
+function renderLiveInfo(){
+  const el=$('#liveinfo');
+  el.innerHTML=LIVE?`<div><span class="livedot"></span>갱신 <b>${KDT(LIVE.updated)}</b></div><div>단기예보 ${KDT(LIVE.village_base)} 발표 · 초단기예보 ${KDT(LIVE.ultra_base)} 발표</div><div>용인 5km 격자 ${LIVE.cells||42}개 → 동별 면적가중 평균${LIVE.error_count?` · 일부 실패 ${LIVE.error_count}건`:''}</div>`:'<div>기상청 예보 연결 대기 중이에요. 매시간 자동으로 받아와요.</div>';
+  el.hidden=scen();$('#scenbox').hidden=!scen();
+}
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('.tabpane').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab);}));
+function update(){recompute();renderLiveInfo();renderStats();renderSide();renderRank();paint();if(three)three.kick();hud(avgI());}
+dsel.value=S.sel.cd;
+update();initThree();
+let viaDb=false;
+async function loadJson(){if(viaDb)return;try{const r=await fetch('data/latest.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(j&&j.updated&&(!LIVE||j.updated!==LIVE.updated)){LIVE=j;update();}}catch(e){}}
+if(location.protocol.startsWith('http')&&!/claude|anthropic/.test(location.hostname)){loadJson();setInterval(loadJson,10*60*1000);}
+(async()=>{try{if(!window.claude||typeof window.claude.use!=='function')return;const db=await window.claude.use('db');if(!db)return;viaDb=true;
+  db.doc('kma/latest').onSnapshot(s=>{if(s.exists){LIVE=s.data();update();}},()=>{});}catch(e){}})();
+const rerender=()=>paint();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',rerender);
+new MutationObserver(rerender).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+})();
