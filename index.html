@@ -377,6 +377,22 @@ ul.todo li b{display:none}
 .panpad{position:absolute;right:calc(288px + 392px + 12px);bottom:12px;z-index:2;display:grid;grid-template-columns:repeat(3,30px);grid-template-rows:repeat(3,30px)}
 .panpad button{border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:11px;cursor:pointer;padding:0}
 .panpad .u{grid-column:2;grid-row:1}.panpad .l{grid-column:1;grid-row:2}.panpad .r{grid-column:3;grid-row:2}.panpad .d{grid-column:2;grid-row:3}
+/* 조작법 안내 */
+.helpbtn{position:absolute;right:calc(288px + 392px + 12px);bottom:112px;z-index:2;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 16px var(--f-body);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.helpbox{position:absolute;left:calc(50% - 340px);top:50%;transform:translate(-50%,-50%);z-index:5;width:min(360px,calc(100% - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.25);padding:14px 16px;border-radius:4px}
+.helpbox[hidden]{display:none}
+.hhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.hhead b{font-size:15px}
+.hhead button{border:0;background:none;color:var(--muted);font-size:16px;cursor:pointer;padding:2px 6px}
+.hlist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.hlist li{display:flex;gap:12px;align-items:center}
+.hlist li div{display:grid}.hlist li b{font-size:13px}.hlist li span{font-size:12.5px;color:var(--muted)}
+.hlist .mouse{width:22px;height:30px;flex:none;color:var(--ink)}
+.hlist .kicon{min-width:22px;flex:none;font-size:11px;font-weight:700;text-align:center;color:var(--accent)!important;white-space:nowrap}
+.touch-only{display:none!important}
+@media (hover:none) and (pointer:coarse){.touch-only{display:grid!important}.mouse-only{display:none!important}}
+.hfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.hfoot .chk{font-size:12px;color:var(--muted)}
+@media (max-width:1000px){.helpbtn{right:12px;bottom:112px}.helpbox{left:50%}}
 @media (max-width:1000px){.hud{left:auto;top:auto}.statbar{left:auto;right:auto;height:auto}.fpanel{width:auto;max-width:100%}.panpad{right:12px}.fpanel.tools{order:2}.statbar{order:3}}
 
 /*THEME-END*/
@@ -403,6 +419,24 @@ ul.todo li b{display:none}
 
   <div class="stage">
     <div class="mapbox" id="mapbox" aria-label="용인시 3D 지형 위험 단계 지도">
+      <button type="button" class="helpbtn" id="helpBtn" aria-label="지도 조작법 보기">?</button>
+      <div class="helpbox" id="helpBox" role="dialog" aria-labelledby="helpTitle" hidden>
+        <div class="hhead"><b id="helpTitle">지도 조작법</b><button type="button" id="helpClose" aria-label="닫기">✕</button></div>
+        <ul class="hlist mouse-only">
+          <li><svg viewBox="0 0 24 32" class="mouse"><rect x="2" y="2" width="20" height="28" rx="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v11M2 13h20" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 0-9 9v1h9z" fill="var(--accent)"/></svg><div><b>왼쪽 버튼 누른 채 끌기</b><span>지도 옮기기</span></div></li>
+          <li><svg viewBox="0 0 24 32" class="mouse"><rect x="2" y="2" width="20" height="28" rx="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v11M2 13h20" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 9 9v1h-9z" fill="var(--accent)"/></svg><div><b>오른쪽 버튼 누른 채 끌기</b><span>돌리기 · 기울이기</span></div></li>
+          <li><svg viewBox="0 0 24 32" class="mouse"><rect x="2" y="2" width="20" height="28" rx="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v11M2 13h20" stroke="currentColor" stroke-width="2"/><rect x="9.5" y="5" width="5" height="7" rx="2.5" fill="var(--accent)"/></svg><div><b>가운데 휠 굴리기</b><span>확대 · 축소</span></div></li>
+          <li><span class="kicon">클릭</span><div><b>왼쪽 버튼 한 번 누르기</b><span>그 동네 선택 · 장소 표시를 누르면 그 장소로 이동</span></div></li>
+          <li><span class="kicon">←↑→</span><div><b>방향키 또는 오른쪽 아래 화살표</b><span>지도 옮기기</span></div></li>
+        </ul>
+        <ul class="hlist touch-only">
+          <li><span class="kicon">☝</span><div><b>한 손가락으로 끌기</b><span>지도 옮기기</span></div></li>
+          <li><span class="kicon">✌</span><div><b>두 손가락 벌리기 · 오므리기</b><span>확대 · 축소</span></div></li>
+          <li><span class="kicon">✌</span><div><b>두 손가락으로 돌리기</b><span>지도 돌리기</span></div></li>
+          <li><span class="kicon">탭</span><div><b>한 번 누르기</b><span>동네 선택 · 장소로 이동</span></div></li>
+        </ul>
+        <div class="hfoot"><label class="chk"><input type="checkbox" id="helpNoMore"> 다음부터 자동으로 띄우지 않기</label><button type="button" class="btn primary" id="helpOk">알겠어요</button></div>
+      </div>
       <div class="panpad" id="panpad" aria-label="지도 이동"><button type="button" data-pan="0,1" aria-label="위로" class="u">▲</button><button type="button" data-pan="-1,0" aria-label="왼쪽으로" class="l">◀</button><button type="button" data-pan="1,0" aria-label="오른쪽으로" class="r">▶</button><button type="button" data-pan="0,-1" aria-label="아래로" class="d">▼</button></div>
       <div class="labels" id="labels"></div>
       <div class="maptip" id="tip" hidden></div>
@@ -452,7 +486,7 @@ ul.todo li b{display:none}
           <label class="chk" for="show-ls"><input type="checkbox" id="show-ls" checked><span class="pmk t-ls sw"><i></i></span>산사태 위험 도로</label>
         </div>
         <div id="legend"></div>
-        <p class="note" style="margin:0">왼쪽 드래그 이동 · 오른쪽 드래그 회전 · 휠 확대 · 방향키 이동 · 동 클릭 선택</p>
+        <p class="note" style="margin:0">왼쪽 드래그 이동 · 오른쪽 드래그 회전 · 휠 확대 · 방향키 이동 · 동 클릭 선택 · 지도 위 ? 버튼에 조작법</p>
       </section>
     </aside>
 
@@ -944,6 +978,16 @@ document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',
   document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab);}));
 function update(){recompute();renderLiveInfo();renderStats();renderPlaces();renderSide();renderRank();paint();if(three)three.kick();hud(avgI());}
+// ---- 조작법 안내 창: 처음 열 때 자동으로, ? 버튼으로 언제든 ----
+const HELPKEY='yongin-map-help-seen';
+function helpOpen(){$('#helpBox').hidden=false;$('#helpOk').focus();}
+function helpClose(){$('#helpBox').hidden=true;if($('#helpNoMore').checked){try{localStorage.setItem(HELPKEY,'1');}catch(e){}}}
+$('#helpBtn').addEventListener('click',()=>{$('#helpBox').hidden?helpOpen():helpClose();});
+$('#helpClose').addEventListener('click',helpClose);$('#helpOk').addEventListener('click',helpClose);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#helpBox').hidden)helpClose();});
+let helpSeen=false;try{helpSeen=localStorage.getItem(HELPKEY)==='1';}catch(e){}
+$('#helpNoMore').checked=true;
+if(!helpSeen)setTimeout(helpOpen,600);
 dsel.value=S.sel.cd;
 update();initThree();
 let viaDb=false;

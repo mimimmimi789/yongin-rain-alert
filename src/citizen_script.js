@@ -424,6 +424,16 @@ document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',
   document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab);}));
 function update(){recompute();renderLiveInfo();renderStats();renderPlaces();renderSide();renderRank();paint();if(three)three.kick();hud(avgI());}
+// ---- 조작법 안내 창: 처음 열 때 자동으로, ? 버튼으로 언제든 ----
+const HELPKEY='yongin-map-help-seen';
+function helpOpen(){$('#helpBox').hidden=false;$('#helpOk').focus();}
+function helpClose(){$('#helpBox').hidden=true;if($('#helpNoMore').checked){try{localStorage.setItem(HELPKEY,'1');}catch(e){}}}
+$('#helpBtn').addEventListener('click',()=>{$('#helpBox').hidden?helpOpen():helpClose();});
+$('#helpClose').addEventListener('click',helpClose);$('#helpOk').addEventListener('click',helpClose);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#helpBox').hidden)helpClose();});
+let helpSeen=false;try{helpSeen=localStorage.getItem(HELPKEY)==='1';}catch(e){}
+$('#helpNoMore').checked=true;
+if(!helpSeen)setTimeout(helpOpen,600);
 dsel.value=S.sel.cd;
 update();initThree();
 let viaDb=false;
