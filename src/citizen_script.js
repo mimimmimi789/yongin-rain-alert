@@ -59,7 +59,7 @@ function assessU(u){
   return {sc,lv:sc>=1?2:sc>=UWARN?1:0,hl,f2:ix.findIndex(v=>v>=1),f1:ix.findIndex(v=>v>=UWARN),m1,m3,m12,times:x.times};
 }
 const uLvAt=k=>{const q=UA[k];if(!q)return -1;if(S.playT==null)return q.lv;return q.hl[Math.min(q.hl.length-1,Math.floor(S.playT))]??0;};
-const DETOUR=location.protocol.startsWith('http')&&!/claude|anthropic/.test(location.hostname)?'detour.html':'https://claude.ai/artifact/5JfuXczfKRyrt3SQjfebJT';
+const DETOUR=(location.protocol.startsWith('http')||location.protocol==='file:')&&!/claude|anthropic/.test(location.hostname)?'detour.html':'https://claude.ai/artifact/5JfuXczfKRyrt3SQjfebJT';
 const uWhen=q=>{const f=q.lv===2?q.f2:q.lv===1?q.f1:-1;return f>=0&&q.times[f]?KH(q.times[f])+'부터 ':'';};
 // ---- 주의 장소 (지하차도 · 둔치주차장 · 산사태 위험 도로) ----
 // 둔치주차장: 행정안전부 생활안전지도 IF_0104 (좌표 없음 → 보정동 탄천 수면 중심으로 대략 표시)
@@ -427,8 +427,10 @@ function update(){recompute();renderLiveInfo();renderStats();renderPlaces();rend
 dsel.value=S.sel.cd;
 update();initThree();
 let viaDb=false;
-async function loadJson(){if(viaDb)return;try{const r=await fetch('data/latest.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(j&&j.updated&&(!LIVE||j.updated!==LIVE.updated)){LIVE=j;update();}}catch(e){}}
-if(location.protocol.startsWith('http')&&!/claude|anthropic/.test(location.hostname)){loadJson();setInterval(loadJson,10*60*1000);}
+// 깃허브 페이지에서는 옆의 data/latest.json, 내 PC에서 파일로 열면 깃허브 페이지의 최신 예보를 읽는다
+const LIVE_URLS=location.protocol==='file:'?['https://mimimmimi789.github.io/yongin-rain-alert/data/latest.json']:['data/latest.json','https://mimimmimi789.github.io/yongin-rain-alert/data/latest.json'];
+async function loadJson(){if(viaDb)return;for(const u of LIVE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)continue;const j=await r.json();if(j&&j.updated&&(!LIVE||j.updated!==LIVE.updated)){LIVE=j;update();}return;}catch(e){}}}
+if((location.protocol.startsWith('http')||location.protocol==='file:')&&!/claude|anthropic/.test(location.hostname)){loadJson();setInterval(loadJson,10*60*1000);}
 (async()=>{try{if(!window.claude||typeof window.claude.use!=='function')return;const db=await window.claude.use('db');if(!db)return;viaDb=true;
   db.doc('kma/latest').onSnapshot(s=>{if(s.exists){LIVE=s.data();update();}},()=>{});}catch(e){}})();
 const rerender=()=>paint();
