@@ -10,7 +10,7 @@ if A in t: t=re.sub(re.escape(A)+'.*?'+re.escape(B),lambda m:A+css+B,t,flags=re.
 else:
     k=t.find('</style>'); t=t[:k]+A+css+B+'\n'+t[k:]
 open('citizen3d_template.html','w',encoding='utf-8').write(t)
-page=t.replace('__DATA__',open('data3d.json',encoding='utf-8').read(),1).replace('__UNDER__',open('underpass3d.json',encoding='utf-8').read(),1)  # 지하차도: ../scripts/build_underpass.py 결과를 화면용 좌표로 바꾼 것
+page=t.replace('__DATA__',open('data3d.json',encoding='utf-8').read(),1).replace('__UNDER__',open('underpass3d.json',encoding='utf-8').read(),1).replace('__SLOPE__',open('landslide3d.json',encoding='utf-8').read(),1)  # 지하차도: ../scripts/build_underpass.py 결과를 화면용 좌표로 바꾼 것
 open('citizen3d.html','w',encoding='utf-8').write(page)
 b=page.find('<div class="app">')
 site=('<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
