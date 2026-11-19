@@ -1,4 +1,6 @@
 const DATA = __DATA__;
+const UPD = __UNDER__;
+const LSD = __SLOPE__;
 (function(){
 const $=s=>document.querySelector(s);
 const LC={
@@ -18,7 +20,7 @@ const KH=s=>{const d=new Date(s);return isNaN(d)?'':d.toLocaleString('ko-KR',{ti
 const KDT=s=>{const d=new Date(s);return isNaN(d)?'-':d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:false});};
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-const S={mode:'lc',exag:4,playing:false,playT:null,rainFx:!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),src:'live',P:150,D:12,pat:'mid',water:true};
+const S={show:{up:true,dc:true,ls:true},ptype:'all',mode:'lc',exag:4,playing:false,playT:null,rainFx:!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),src:'live',P:150,D:12,pat:'mid',water:true};
 let LIVE=null, SCEN=null, A=new Map();
 const scen=()=>S.src==='scen';
 const src=()=>scen()?(SCEN||(SCEN=makeScen())):LIVE;
@@ -42,7 +44,83 @@ function assess(d){
   const tot=a.reduce((p,v)=>p+v,0);
   return {a,n,hl,lv:Math.max(0,...hl),r3,i3,r12,tot,q:runoff(d.area,r12),first:hl.findIndex(v=>v>=1),times:(X.times||[]).slice(0,24)};
 }
-function recompute(){A=new Map();DATA.dongs.forEach(d=>A.set(d,assess(d)));}
+function recompute(){A=new Map();DATA.dongs.forEach(d=>A.set(d,assess(d)));UA=UPD.map(assessU);PL.forEach(p=>p.q=p.type==='up'?UA[p.k]:p.type==='ls'?assessLS(p):assessDC(p));}
+// ---- 지하차도: 시간당 50mm · 3시간 90mm · 12시간 180mm(호우경보 수준) 중 하나라도 넘으면 통제 검토, 60%면 주의 (임시 기준)
+const UT=[50,90,180], UWARN=0.6, ULVN=['평소','주의','통제 검토'];
+let UA=[];
+const uW=u=>(u.n?1:0.85)*(u.low<0.2?1.15:1);
+const dongByCd=new Map(DATA.dongs.map(d=>[d.cd,d]));
+function assessU(u){
+  const x=A.get(dongByCd.get(u.cd)); if(!x) return null;
+  const a=x.a,w=uW(u),ix=[];let m1=0,m3=0,m12=0;
+  for(let i=0;i<a.length;i++){let r3=0,r12=0;for(let k=Math.max(0,i-11);k<=i;k++){r12+=a[k];if(k>i-3)r3+=a[k];}
+    m1=Math.max(m1,a[i]);m3=Math.max(m3,r3);m12=Math.max(m12,r12);ix.push(Math.max(a[i]/UT[0],r3/UT[1],r12/UT[2])*w);}
+  const sc=Math.max(0,...ix),hl=ix.map(v=>v>=1?2:v>=UWARN?1:0);
+  return {sc,lv:sc>=1?2:sc>=UWARN?1:0,hl,f2:ix.findIndex(v=>v>=1),f1:ix.findIndex(v=>v>=UWARN),m1,m3,m12,times:x.times};
+}
+const uLvAt=k=>{const q=UA[k];if(!q)return -1;if(S.playT==null)return q.lv;return q.hl[Math.min(q.hl.length-1,Math.floor(S.playT))]??0;};
+const DETOUR=(location.protocol.startsWith('http')||location.protocol==='file:')&&!/claude|anthropic/.test(location.hostname)?'detour.html':'https://claude.ai/artifact/5JfuXczfKRyrt3SQjfebJT';
+const uWhen=q=>{const f=q.lv===2?q.f2:q.lv===1?q.f1:-1;return f>=0&&q.times[f]?KH(q.times[f])+'부터 ':'';};
+// ---- 주의 장소 (지하차도 · 둔치주차장 · 산사태 위험 도로) ----
+// 둔치주차장: 행정안전부 생활안전지도 IF_0104 (좌표 없음 → 보정동 탄천 수면 중심으로 대략 표시)
+const DUNCHI=[{dong:'보정동',nm:'보정2 공영주차장 (탄천 둔치)',river:'탄천',spaces:220,risk:'1등급',parts:3,px:398,py:348}];
+const PT={up:{nm:'지하차도',lv:['평소','주의','통제 검토']},dc:{nm:'둔치주차장',lv:['평소','주의','차량 이동']},ls:{nm:'산사태 위험 도로',lv:['평소','주의','통제 가능']}};
+const PL=[
+  ...UPD.map((u,k)=>({type:'up',k,nm:u.nm,cd:u.cd,px:u.px,py:u.py,named:!!u.n,meta:`${u.road?u.road+' · ':''}길이 ${u.L}m${u.low<0.2?' · 주변보다 낮은 곳':''}`})),
+  ...DUNCHI.map(q=>({type:'dc',nm:q.nm,cd:DATA.dongs.find(d=>d.nm===q.dong).cd,px:q.px,py:q.py,named:true,meta:`${q.river} · ${q.spaces}대 · 침수위험 ${q.risk} · 위치는 대략`})),
+  ...LSD.map(s=>({type:'ls',nm:s.nm,cd:s.cd,px:s.px,py:s.py,named:true,S:s.S,meta:`${fmt(s.L/1000,1)}km 구간 · 옆 비탈 최대 ${Math.round(s.sl)}° · 사면 취약도 ${s.S}`})),
+];
+PL.forEach((p,i)=>p.i=i);
+// 산사태 위험 도로: 사면 취약도(경사·산림) × 강우 (24시간 200mm, 3시간 90mm, 1시간 50mm 중 큰 비율) ≥0.45 통제 가능, ≥0.22 주의 (임시)
+function assessLS(p){const x=A.get(dongByCd.get(p.cd));if(!x)return null;const a=x.a,ix=[];let c=0;
+  for(let i=0;i<a.length;i++){c+=a[i];let r3=0;for(let k=Math.max(0,i-2);k<=i;k++)r3+=a[k];ix.push(p.S/100*Math.max(c/200,r3/90,a[i]/50));}
+  const sc=Math.max(0,...ix);return {sc:sc/0.45,lv:sc>=0.45?2:sc>=0.22?1:0,hl:ix.map(v=>v>=0.45?2:v>=0.22?1:0),f2:ix.findIndex(v=>v>=0.45),f1:ix.findIndex(v=>v>=0.22),times:x.times};}
+// 둔치주차장: 3시간 60mm 또는 12시간 110mm(호우주의보 수준)면 차량 이동, 그 절반이면 주의 (임시)
+function assessDC(p){const x=A.get(dongByCd.get(p.cd));if(!x)return null;const a=x.a,ix=[];
+  for(let i=0;i<a.length;i++){let r3=0,r12=0;for(let k=Math.max(0,i-11);k<=i;k++){r12+=a[k];if(k>i-3)r3+=a[k];}ix.push(Math.max(r3/60,r12/110));}
+  const sc=Math.max(0,...ix);return {sc,lv:sc>=1?2:sc>=0.5?1:0,hl:ix.map(v=>v>=1?2:v>=0.5?1:0),f2:ix.findIndex(v=>v>=1),f1:ix.findIndex(v=>v>=0.5),times:x.times};}
+const pLvAt=p=>{const q=p.q;if(!q)return -1;if(S.playT==null)return q.lv;return q.hl[Math.min(q.hl.length-1,Math.floor(S.playT))]??0;};
+const ADV={
+  up:['평소엔 그대로 다녀도 돼요.','바닥에 물이 고여 있으면 들어가지 말고 돌아가세요.','통제될 수 있어요. 들어가지 말고 우회하세요. 차 안에 물이 차면 바로 문을 열고 나오세요.'],
+  dc:['큰 비 예보 때는 이용을 피하세요.','비 오기 전에 차를 옮겨 두세요.','지금 바로 차를 옮기세요. 둔치는 가장 먼저 잠겨요.'],
+  ls:['평소엔 그대로 다녀도 돼요.','낙석·토사에 주의하고 산 옆 도로는 천천히 지나가세요.','비탈면이 무너지거나 흙이 쏟아질 수 있어요. 이 길은 피하고 우회하세요.'],
+};
+const PIC={up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 20V12a9 9 0 0 1 18 0v8M7 20v-6a5 5 0 0 1 10 0v6"/></svg>',
+  dc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M10 17V8h3a3 3 0 0 1 0 6h-3"/></svg>',
+  ls:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 20h18L13 5l-3 5-2-2z"/><circle cx="16" cy="16" r="1.3"/><circle cx="12.5" cy="17.5" r="1"/></svg>'};
+const pWhen=p=>{const q=p.q;if(!q)return '';const f=q.lv===2?q.f2:q.lv===1?q.f1:-1;return f>=0&&q.times[f]?KH(q.times[f])+'부터':'';};
+const pDist=(p,d)=>Math.hypot(p.px-d.cx,p.py-d.cy)*20/1000;
+function placeCard(p,opt={}){const q=p.q,lv=q?Math.max(0,pLvAt(p)):-1,T=PT[p.type],w=pWhen(p),d=dongByCd.get(p.cd);
+  return `<button type="button" class="pcard l${lv}" data-p="${p.i}"><span class="pic">${PIC[p.type]}</span><span class="pbody">
+    <span class="ptop"><span class="ptype">${T.nm}</span>${q?`<span class="lvtag u${lv}">${T.lv[lv]}</span>`:''}${lv>0&&w?`<span class="pwhen">${w}</span>`:''}</span>
+    <span class="pname">${p.nm}</span><span class="pmeta">${d?d.nm:''}${opt.dist!=null?` · ${fmt(opt.dist,1)}km`:''} · ${p.meta}</span>
+    ${q?`<span class="padv">${ADV[p.type][lv]}${lv===2&&p.type!=='dc'?` <a href="${DETOUR}" target="_blank" rel="noopener">우회 경로</a>`:''}</span>`:''}
+    ${q&&lv===0?`<span class="pbar"><i style="width:${Math.min(100,q.sc*100).toFixed(0)}%"></i></span>`:''}</span></button>`;}
+function bindCards(el){el.querySelectorAll('.pcard').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('a'))return;const p=PL[+b.dataset.p];choose(dongByCd.get(p.cd),false);if(three)three.focus(p);}));}
+const pOrder=(a,b)=>((b.q?pLvAt(b):-1)-(a.q?pLvAt(a):-1))||((b.q?.sc||0)-(a.q?.sc||0));
+function renderPlaces(){
+  const vis=PL.filter(p=>p.named), lv=p=>p.q?pLvAt(p):-1, c2=vis.filter(p=>lv(p)===2), c1=vis.filter(p=>lv(p)===1);
+  const st=$('#pstatus'), byT=a=>Object.keys(PT).map(t=>[t,a.filter(p=>p.type===t).length]).filter(([,n])=>n).map(([t,n])=>`${PT[t].nm} ${n}곳`).join(' · ');
+  const first=a=>{const f=a.map(p=>{const q=p.q,i=q.lv===2?q.f2:q.f1;return i>=0?i:99;});const m=Math.min(...f);return m<99?KH(a[0].q.times[m]):'';};
+  if(!src()){st.className='pstatus';st.innerHTML='<b>기상청 예보를 기다리는 중이에요</b><p>왼쪽 호우 시나리오로 큰 비 때 어떤 곳이 위험해지는지 먼저 볼 수 있어요.</p>';}
+  else if(c2.length){const f=first(c2);st.className='pstatus l2';st.innerHTML=`<span class="big">${c2.length}</span><div><b>지금 피해야 할 곳 ${c2.length}곳</b><p>${byT(c2)}${f?` · ${f}부터`:''}</p></div>`;}
+  else if(c1.length){const f=first(c1);st.className='pstatus l1';st.innerHTML=`<span class="big">${c1.length}</span><div><b>주의할 곳 ${c1.length}곳</b><p>${byT(c1)}${f?` · ${f}부터`:''}</p></div>`;}
+  else{const mx=vis.reduce((a,p)=>p.q&&p.q.sc>(a?a.q.sc:-1)?p:a,null);st.className='pstatus l0';st.innerHTML=`<span class="big">0</span><div><b>지금 위험한 장소는 없어요</b><p>앞으로 24시간 예보 기준이에요.${mx?` 기준에 가장 가까운 곳은 ${mx.nm}(${Math.round(mx.q.sc*100)}%)예요.`:''}</p></div>`;}
+  const types=[['all','전체'],...Object.keys(PT).map(t=>[t,PT[t].nm])];
+  $('#pfilter').innerHTML=types.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${S.ptype===v}">${l} <small>${v==='all'?vis.length:vis.filter(p=>p.type===v).length}</small></button>`).join('');
+  $('#pfilter').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S.ptype=b.dataset.v;renderPlaces();}));
+  const list=vis.filter(p=>S.ptype==='all'||p.type===S.ptype).sort(pOrder);
+  $('#plist').innerHTML=list.map(p=>placeCard(p)).join('');bindCards($('#plist'));
+}
+function renderMyPlaces(d){
+  const mine=PL.filter(p=>p.cd===d.cd&&p.named).sort(pOrder);
+  const near=PL.filter(p=>p.cd!==d.cd&&p.named&&pDist(p,d)<=4).map(p=>[p,pDist(p,d)]).sort((a,b)=>pOrder(a[0],b[0])||a[1]-b[1]).slice(0,4);
+  const un=UPD.filter(u=>u.cd===d.cd&&!u.n).length;
+  $('#myplaces').innerHTML=(mine.length?mine.map(p=>placeCard(p)).join(''):'<p class="note" style="margin:0 0 6px">이 동네에는 등록된 지하차도·둔치주차장·산사태 위험 도로가 없어요.</p>')+
+    (un?`<p class="note" style="margin:2px 0 8px">이름 없는 지하 구간·굴다리 ${un}곳도 있어요. 큰 비 때는 물이 고였는지 보고 지나가세요.</p>`:'')+
+    (near.length?`<div class="subh">가까운 이웃 동네 (4km 안)</div>`+near.map(([p,k])=>placeCard(p,{dist:k})).join(''):'');
+  bindCards($('#myplaces'));
+}
 const lvAt=(d)=>{const x=A.get(d);if(!x)return -1;if(S.playT==null)return x.lv;return x.hl[Math.min(x.n-1,Math.floor(S.playT))]??0;};
 const cumAt=(arr,t)=>{if(t==null)return arr.reduce((p,v)=>p+v,0);const h=Math.floor(t);let p=0;for(let i=0;i<h&&i<arr.length;i++)p+=arr[i];if(h<arr.length)p+=arr[h]*(t-h);return p;};
 const dongArea=d=>{let s=0;for(const c in d.area)s+=d.area[c];return s;};
@@ -138,6 +216,8 @@ function waterField(){
   WCACHE={key,W,vol};return W;
 }
 const labelEls=DATA.dongs.map(d=>{const e=document.createElement('span');e.className='lab';e.textContent=d.nm;$('#labels').appendChild(e);return e;});
+const pEls=PL.map(p=>{if(!p.named)return null;const e=document.createElement('button');e.type='button';e.className='pmk t-'+p.type;e.innerHTML='<i></i><span></span>';e.querySelector('span').textContent=p.nm;
+  e.setAttribute('aria-label',PT[p.type].nm+' '+p.nm);e.addEventListener('click',()=>{choose(dongByCd.get(p.cd),false);if(three)three.focus(p);});$('#labels').appendChild(e);return e;});
 
 const rainClass=I=>I<=0?'비 없음':I<3?'약한 비':I<15?'보통 비':I<30?'강한 비':'매우 강한 비';
 const avgI=()=>{const c=citySeries();return c.length?c.reduce((a,b)=>a+b,0)/c.length:0;};
@@ -162,7 +242,11 @@ function initThree(){
   scene.add(new THREE.HemisphereLight(0xffffff,0x5a6470,0.62));
   const sun=new THREE.DirectionalLight(0xffffff,0.62);sun.position.set(-25,22,-30);scene.add(sun);
   const controls=new THREE.OrbitControls(camera,renderer.domElement);
-  controls.maxPolarAngle=Math.PI*0.47;controls.minDistance=6;controls.maxDistance=140;controls.target.set(0,0,0);
+  controls.maxPolarAngle=Math.PI*0.47;controls.minDistance=4;controls.maxDistance=140;controls.target.set(0,0,0);
+  controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};
+  controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_ROTATE};
+  controls.screenSpacePanning=false;controls.panSpeed=1.1;controls.keyPanSpeed=20;controls.listenToKeyEvents&&controls.listenToKeyEvents(window);
+  controls.addEventListener('change',()=>{const t=controls.target;const lim=(x,m)=>Math.max(-m,Math.min(m,x));const nx=lim(t.x,SX*.6),nz=lim(t.z,SY*.6);if(nx!==t.x||nz!==t.z){camera.position.x+=nx-t.x;camera.position.z+=nz-t.z;t.x=nx;t.z=nz;}t.y=0;});
   function applyZ(){const pos=geo.attributes.position;for(let i=0;i<pos.count;i++)pos.setZ(i,(zArr[i]/10-DEM.min)/1000*S.exag);pos.needsUpdate=true;geo.computeVertexNormals();geo.computeBoundingSphere();}
   const v=new THREE.Vector3();
   function render(){
@@ -172,6 +256,13 @@ function initThree(){
       v.set((d.cx/TW-.5)*SX,(elevAt(d.cx,d.cy)-DEM.min)/1000*S.exag+.15,(d.cy/TH-.5)*SY).project(camera);
       if(v.z>1){e.hidden=true;return;}e.hidden=false;e.style.transform=`translate(${((v.x+1)/2*w).toFixed(1)}px,${((1-v.y)/2*h).toFixed(1)}px) translate(-50%,-50%)`;
       e.classList.toggle('on',S.sel===d);});
+    const near=camera.position.distanceTo(controls.target)<20;
+    PL.forEach(p=>{const e=pEls[p.i];if(!e)return;if(!S.show[p.type]){e.hidden=true;return;}
+      v.set((p.px/TW-.5)*SX,(elevAt(p.px,p.py)-DEM.min)/1000*S.exag+.05,(p.py/TH-.5)*SY).project(camera);
+      if(v.z>1||v.x<-1.05||v.x>1.05||v.y<-1.05||v.y>1.05){e.hidden=true;return;}e.hidden=false;const lv=Math.max(0,pLvAt(p));
+      e.className='pmk t-'+p.type+' l'+lv+((S.focus===p.i||(show&&(lv>0&&near||S.sel.cd===p.cd&&near)))?' nm':'')+(S.focus===p.i?' on':'');
+      e.title=`${PT[p.type].nm} · ${p.nm} · ${PT[p.type].lv[lv]}`;e.style.zIndex=10+lv*10+(S.focus===p.i?50:0);
+      e.style.transform=`translate(${((v.x+1)/2*w).toFixed(1)}px,${((1-v.y)/2*h).toFixed(1)}px) translate(-9px,-50%)`;});
   }
   function overlay(){const w=box.clientWidth;if(window.innerWidth<=1000)return {L:0,R:0,B:0,k:1};
     const st=box.getBoundingClientRect(),tl=$('.tools').getBoundingClientRect(),sd=$('.side').getBoundingClientRect(),sb=$('#statbar').getBoundingClientRect();
@@ -203,17 +294,23 @@ function initThree(){
   let last=performance.now(),lastQ=-1,playT=0,looping=false;
   function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;let I=avgI();
     if(S.playing){playT+=dt*24/PLAY_SEC;
-      if(playT>=24){S.playing=false;S.playT=null;lastQ=-1;setPlayBtn();paint();renderStats();}
-      else{S.playT=playT;I=citySeries()[Math.floor(playT)]||0;const q=Math.floor(playT*2);if(q!==lastQ){lastQ=q;paint();renderStats();}}}
+      if(playT>=24){S.playing=false;S.playT=null;lastQ=-1;setPlayBtn();paint();renderStats();renderPlaces();}
+      else{S.playT=playT;I=citySeries()[Math.floor(playT)]||0;const q=Math.floor(playT*2);if(q!==lastQ){lastQ=q;paint();renderStats();renderPlaces();}}}
     if(S.rainFx)stepRain(dt,I);else rgeo.setDrawRange(0,0);
     hud(I);render();
     if(S.rainFx||S.playing)requestAnimationFrame(frame);else looping=false;}
   function kick(){if(!looping){looping=true;last=performance.now();requestAnimationFrame(frame);}}
   function setPlayBtn(){$('#play').textContent=S.playing?'■ 정지':'▶ 24시간 재생';$('#play').setAttribute('aria-pressed',S.playing);}
-  $('#play').addEventListener('click',()=>{if(!src())return;if(S.playing){S.playing=false;S.playT=null;paint();renderStats();}else{S.playing=true;playT=0;lastQ=-1;S.playT=0;}setPlayBtn();kick();});
+  $('#play').addEventListener('click',()=>{if(!src())return;if(S.playing){S.playing=false;S.playT=null;paint();renderStats();renderPlaces();}else{S.playing=true;playT=0;lastQ=-1;S.playT=0;}setPlayBtn();kick();});
   $('#rainfx').checked=S.rainFx;
   $('#rainfx').addEventListener('change',e=>{S.rainFx=e.target.checked;if(!S.rainFx){rgeo.setDrawRange(0,0);render();}kick();});
-  three={texture,render,kick,stop(){S.playing=false;S.playT=null;setPlayBtn();}};
+  function focus(p){S.focus=p.i;const tx=(p.px/TW-.5)*SX,tz=(p.py/TH-.5)*SY,off=camera.position.clone().sub(controls.target);const L=Math.min(off.length(),14);off.setLength(L);
+    const t0=controls.target.clone(),c0=camera.position.clone(),t1=new THREE.Vector3(tx,0,tz),c1=t1.clone().add(off);let s=null;
+    const step=now=>{if(s==null)s=now;const k=Math.min(1,(now-s)/600),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;controls.target.lerpVectors(t0,t1,e);camera.position.lerpVectors(c0,c1,e);controls.update();render();if(k<1)requestAnimationFrame(step);};requestAnimationFrame(step);}
+  function pan(dx,dz){const f=new THREE.Vector3();camera.getWorldDirection(f);f.y=0;f.normalize();const r=new THREE.Vector3(-f.z,0,f.x);const d=camera.position.distanceTo(controls.target)*0.18;
+    const m=r.multiplyScalar(dx*d).add(f.multiplyScalar(dz*d));controls.target.add(m);camera.position.add(m);controls.update();render();}
+  document.querySelectorAll('#panpad [data-pan]').forEach(b=>b.addEventListener('click',()=>{const [x,z]=b.dataset.pan.split(',').map(Number);pan(x,z);}));
+  three={texture,render,kick,focus,stop(){S.playing=false;S.playT=null;setPlayBtn();}};
   kick();if(cls)paint();
 }
 function tipShow(e,d){const x=A.get(d),t=$('#tip'),lv=lvAt(d);
@@ -229,11 +326,12 @@ function drawLegend(){const L=$('#legend');
 function segment(el,items,key,cb){el.innerHTML=items.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${String(S[key])===String(v)}">${l}</button>`).join('');
   el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S[key]=b.dataset.v;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));cb();}));}
 segment($('#mode'),[['lc','토지피복'],['level','위험 단계'],['rain','강수량']],'mode',paint);
+['up','dc','ls'].forEach(t=>{const c=$('#show-'+t);c.checked=S.show[t];c.addEventListener('change',e=>{S.show[t]=e.target.checked;if(three)three.render();});});
 $('#water').checked=S.water;$('#water').addEventListener('change',e=>{S.water=e.target.checked;paint();});
 const dsel=$('#dong');
 ['처인구','기흥구','수지구'].forEach(g=>{const og=document.createElement('optgroup');og.label=g;DATA.dongs.filter(d=>d.gu===g).sort((a,b)=>a.nm.localeCompare(b.nm,'ko')).forEach(d=>{const o=document.createElement('option');o.value=d.cd;o.textContent=d.nm;og.appendChild(o);});dsel.appendChild(og);});
 dsel.addEventListener('change',()=>choose(DATA.dongs.find(d=>d.cd===dsel.value)));
-function choose(d){S.sel=d;dsel.value=d.cd;try{localStorage.setItem('yongin-dong',d.cd);}catch(e){}paint();renderSide();renderRank();if(three)three.render();}
+function choose(d,clearFocus=true){if(clearFocus)S.focus=null;S.sel=d;dsel.value=d.cd;try{localStorage.setItem('yongin-dong',d.cd);}catch(e){}paint();renderSide();renderRank();if(three)three.render();}
 segment($('#src'),[['live','기상청 실시간'],['scen','호우 시나리오']],'src',()=>{if(three)three.stop();update();});
 const PRESETS=[['많은 비',60,6,'mid','6시간 60mm'],['장마 하루',120,24,'uni','24시간 120mm'],['주의보급',70,3,'mid','3시간 70mm'],['경보급',100,3,'mid','3시간 100mm'],['하루 폭우',200,24,'mid','24시간 200mm'],['극한호우',300,12,'front','12시간 300mm']];
 function drawPresets(){$('#presets').innerHTML=PRESETS.map(([n,P,D,p,t],i)=>`<button type="button" data-i="${i}" title="${t}" aria-pressed="${S.P===P&&S.D===D&&S.pat===p}">${n}<small>${t}</small></button>`).join('');
@@ -251,7 +349,6 @@ const TODO=[
   ['하천변·계곡·징검다리에 가까이 가지 마세요','지하차도·지하 주차장 진입을 피하고, 물이 차오르면 차를 두고 높은 곳으로 이동하세요','반지하 주택은 귀중품을 올리고 대피 준비를 하세요','위험하면 바로 119에 신고하세요'],
 ];
 // 행정안전부 생활안전지도 둔치주차장(IF_0104) 2026-11-18 조회, 용인시 sig_cd 4146x 3건 = 보정2 공영주차장 출입구 구역 3곳
-const DUNCHI=[{dong:'보정동',nm:'보정2 공영주차장 (탄천 둔치)',river:'탄천',spaces:220,risk:'1등급',parts:3}];
 const IC={
   river:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8c3-2 5 2 8 0s5-2 8 0 4 0 4 0M2 13c3-2 5 2 8 0s5-2 8 0 4 0 4 0M2 18c3-2 5 2 8 0s5-2 8 0 4 0 4 0"/></svg>',
   park:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M10 17V8h3a3 3 0 0 1 0 6h-3"/></svg>',
@@ -281,11 +378,9 @@ function renderSide(){
   const water=((d.area['710']||0)+(d.area['510']||0))/1e4, warn=lv>=1;
   $('#placeTitle').textContent=`${d.nm} 주의 장소`;
   const rows=[water>=3?['river','하천·수변 구역',`동 안에 하천·습지가 약 ${fmt(water,0)}ha 있어요. ${warn?'지금은 하천변 산책로와 징검다리 이용을 피하세요.':'큰 비가 예보되면 가장 먼저 통제되는 곳이에요.'}`,false]:['river','하천·수변 구역','동 안에 큰 하천 구역은 적어요. 이웃 동 하천변 이동 시 주의하세요.',false],
-    (()=>{const p=DUNCHI.filter(q=>q.dong===d.nm);
-      if(p.length) return ['park','둔치 주차장',p.map(q=>`<b>${q.nm}</b> · ${q.river} · ${q.spaces}대 · 위험 ${q.risk} (출입구 구역 ${q.parts}곳). ${lv>=2?'지금 바로 차를 옮기세요. 둔치는 가장 먼저 잠겨요.':lv>=1?'비 오기 전에 차를 옮겨 두세요.':'큰 비 예보 때는 이용을 피하세요.'}`).join('<br>'),false];
-      return ['park','둔치 주차장',`이 동네에는 등록된 둔치 주차장이 없어요. 용인시 등록 1곳: ${DUNCHI.map(q=>q.nm+' ('+q.dong+')').join(', ')}.`,false];})(),
-    ['tunnel','지하차도','경기도 도로대장 지하차도 자료를 연결하면 동네 지하차도 목록을 보여드려요.',true]];
-  $('#places').innerHTML=rows.map(([ic,t,ds,p])=>`<div class="place"><div class="ic" style="color:${warn&&!p?LVC[lv]:'var(--muted)'}">${IC[ic]}</div><div><div class="t">${t}${p?'<span class="pend">자료 연결 예정</span>':''}</div><div class="d">${ds}</div></div></div>`).join('');
+    ];
+  renderMyPlaces(d);
+  $('#places').innerHTML=rows.map(([ic,t,ds,p,ul])=>`<div class="place"><div class="ic" style="color:${ul!=null?(ul>0?LVC[ul]:'var(--muted)'):warn&&!p?LVC[lv]:'var(--muted)'}">${IC[ic]}</div><div><div class="t">${t}${p?'<span class="pend">자료 연결 예정</span>':''}</div><div class="d">${ds}</div></div></div>`).join('');
   $('#guideAll').innerHTML=TODO.map((l,k)=>`<section class="panel"><div class="phead"><h2><span class="lvtag l${k}">${LVN[k]}</span> 단계</h2></div><ul class="todo">${l.map((t,i)=>`<li><b>${i+1}</b><span>${t}</span></li>`).join('')}</ul></section>`).join('');
 }
 function renderRank(){
@@ -297,7 +392,8 @@ function renderRank(){
 function renderStats(){
   const X=src(), xs=DATA.dongs.map(d=>({d,x:A.get(d)}));
   const c=[0,0,0];xs.forEach(({d,x})=>{if(x)c[lvAt(d)]++;});
-  ['0','1','2'].forEach(k=>$('#cnt'+k).querySelector('b').textContent=X?c[k]:'-');
+  const pv=PL.filter(p=>p.named&&p.q), pc=[0,0,0];pv.forEach(p=>pc[pLvAt(p)]++);
+  ['0','1','2'].forEach(k=>$('#cnt'+k).querySelector('b').textContent=X?pc[k]:'-');
   const pill=$('#srcPill');
   pill.className='chip'+(scen()?' demo':LIVE?' live':'');
   pill.textContent=scen()?`호우 시나리오 · ${S.D}시간 ${S.P}mm (가상)`:LIVE?`● 기상청 실시간 · ${KDT(LIVE.updated)} 갱신`:'기상청 자료 연결 대기 중';
@@ -306,13 +402,16 @@ function renderStats(){
   const top=xs.filter(a=>a.x).sort((a,b)=>b.x.r3-a.x.r3)[0];
   const early=xs.filter(a=>a.x&&a.x.first>=0).sort((a,b)=>a.x.first-b.x.first)[0];
   const obs=Object.values(((X.obs||{}).dongs)||{}).filter(v=>v!=null), om=obs.length?obs.reduce((a,b)=>a+b,0)/obs.length:null;
+  const pt=ty=>{const a=pv.filter(p=>p.type===ty),n2=a.filter(p=>pLvAt(p)===2).length,n1=a.filter(p=>pLvAt(p)===1).length;return [n2,n1,a.length];};
+  const [u2,u1,un]=pt('up'),[l2,l1,ln]=pt('ls'),[d2,d1]=pt('dc');
+  const pe=pv.filter(p=>p.q.lv>0).map(p=>[p,p.q.lv===2?p.q.f2:p.q.f1]).filter(a=>a[1]>=0).sort((a,b)=>a[1]-b[1])[0];
   const tiles=[
-    ['경계 동네',String(c[2]),'곳',S.playT!=null?'재생 시각 기준':'향후 24시간 최고 단계'],
-    ['주의 동네',String(c[1]),'곳','전체 38개 동 중'],
+    ['지하차도 통제 검토',String(u2),'곳',u1?`주의 ${u1}곳 · 전체 ${un}곳`:`전체 ${un}곳 중`],
+    ['산사태 위험 도로',String(l2),'곳',l1?`주의 ${l1}곳 · 전체 ${ln}곳`:`통제 가능 단계 · 전체 ${ln}곳`],
+    ['둔치주차장',d2?'차량 이동':d1?'주의':'평소','','보정2 공영주차장 (탄천)'],
+    ['가장 빠른 위험',pe?KH(pe[0].q.times[pe[1]]):'없음','',pe?pe[0].nm:'24시간 안에 없음'],
     ['24시간 평균 강수',fmt(tot,1),'mm',`최대 ${fmt(mxh,1)} mm/h · ${rainClass(mxh)}`],
-    scen()?(()=>{const t=xs.filter(a=>a.x).sort((a,b)=>b.x.q-a.x.q)[0];return ['유출이 가장 큰 동',t?t.d.nm:'-','',t?`예상 유출고 ${fmt(t.x.q,1)} mm`:''];})():['가장 센 3시간',top?top.d.nm:'-','',top?`${fmt(top.x.r3,1)} mm`:''],
-    ['가장 빠른 주의',early?KH(early.x.times[early.x.first]):'없음','',early?early.d.nm:'24시간 안에 없음'],
-    ['직전 1시간 관측',om==null?'-':fmt(om,1),om==null?'':'mm',scen()?'시나리오에는 없음':'38개 동 평균 (초단기실황)'],
+    ['주의 이상 동네',String(c[1]+c[2]),'곳',c[2]?`경계 ${c[2]}곳 포함`:'전체 38개 동 중'],
   ];
   $('#statbar').innerHTML=tiles.map(([k,v,u,s])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div><div class="s">${s}</div></div>`).join('');
 }
@@ -324,12 +423,14 @@ function renderLiveInfo(){
 document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
   document.querySelectorAll('.tabpane').forEach(p=>p.hidden=p.dataset.pane!==b.dataset.tab);}));
-function update(){recompute();renderLiveInfo();renderStats();renderSide();renderRank();paint();if(three)three.kick();hud(avgI());}
+function update(){recompute();renderLiveInfo();renderStats();renderPlaces();renderSide();renderRank();paint();if(three)three.kick();hud(avgI());}
 dsel.value=S.sel.cd;
 update();initThree();
 let viaDb=false;
-async function loadJson(){if(viaDb)return;try{const r=await fetch('data/latest.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();if(j&&j.updated&&(!LIVE||j.updated!==LIVE.updated)){LIVE=j;update();}}catch(e){}}
-if(location.protocol.startsWith('http')&&!/claude|anthropic/.test(location.hostname)){loadJson();setInterval(loadJson,10*60*1000);}
+// 깃허브 페이지에서는 옆의 data/latest.json, 내 PC에서 파일로 열면 깃허브 페이지의 최신 예보를 읽는다
+const LIVE_URLS=location.protocol==='file:'?['https://mimimmimi789.github.io/yongin-rain-alert/data/latest.json']:['data/latest.json','https://mimimmimi789.github.io/yongin-rain-alert/data/latest.json'];
+async function loadJson(){if(viaDb)return;for(const u of LIVE_URLS){try{const r=await fetch(u+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)continue;const j=await r.json();if(j&&j.updated&&(!LIVE||j.updated!==LIVE.updated)){LIVE=j;update();}return;}catch(e){}}}
+if((location.protocol.startsWith('http')||location.protocol==='file:')&&!/claude|anthropic/.test(location.hostname)){loadJson();setInterval(loadJson,10*60*1000);}
 (async()=>{try{if(!window.claude||typeof window.claude.use!=='function')return;const db=await window.claude.use('db');if(!db)return;viaDb=true;
   db.doc('kma/latest').onSnapshot(s=>{if(s.exists){LIVE=s.data();update();}},()=>{});}catch(e){}})();
 const rerender=()=>paint();
