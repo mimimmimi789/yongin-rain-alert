@@ -1,4 +1,5 @@
 const DATA = __DATA__;
+const UPD = __UNDER__;
 (function(){
 const $=s=>document.querySelector(s);
 const LC={
@@ -18,7 +19,7 @@ const KH=s=>{const d=new Date(s);return isNaN(d)?'':d.toLocaleString('ko-KR',{ti
 const KDT=s=>{const d=new Date(s);return isNaN(d)?'-':d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:false});};
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-const S={mode:'lc',exag:4,playing:false,playT:null,rainFx:!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),src:'live',P:150,D:12,pat:'mid',water:true};
+const S={under:true,mode:'lc',exag:4,playing:false,playT:null,rainFx:!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches),src:'live',P:150,D:12,pat:'mid',water:true};
 let LIVE=null, SCEN=null, A=new Map();
 const scen=()=>S.src==='scen';
 const src=()=>scen()?(SCEN||(SCEN=makeScen())):LIVE;
@@ -42,7 +43,23 @@ function assess(d){
   const tot=a.reduce((p,v)=>p+v,0);
   return {a,n,hl,lv:Math.max(0,...hl),r3,i3,r12,tot,q:runoff(d.area,r12),first:hl.findIndex(v=>v>=1),times:(X.times||[]).slice(0,24)};
 }
-function recompute(){A=new Map();DATA.dongs.forEach(d=>A.set(d,assess(d)));}
+function recompute(){A=new Map();DATA.dongs.forEach(d=>A.set(d,assess(d)));UA=UPD.map(assessU);}
+// ---- 지하차도: 시간당 50mm · 3시간 90mm · 12시간 180mm(호우경보 수준) 중 하나라도 넘으면 통제 검토, 60%면 주의 (임시 기준)
+const UT=[50,90,180], UWARN=0.6, ULVN=['평소','주의','통제 검토'];
+let UA=[];
+const uW=u=>(u.n?1:0.85)*(u.low<0.2?1.15:1);
+const dongByCd=new Map(DATA.dongs.map(d=>[d.cd,d]));
+function assessU(u){
+  const x=A.get(dongByCd.get(u.cd)); if(!x) return null;
+  const a=x.a,w=uW(u),ix=[];let m1=0,m3=0,m12=0;
+  for(let i=0;i<a.length;i++){let r3=0,r12=0;for(let k=Math.max(0,i-11);k<=i;k++){r12+=a[k];if(k>i-3)r3+=a[k];}
+    m1=Math.max(m1,a[i]);m3=Math.max(m3,r3);m12=Math.max(m12,r12);ix.push(Math.max(a[i]/UT[0],r3/UT[1],r12/UT[2])*w);}
+  const sc=Math.max(0,...ix),hl=ix.map(v=>v>=1?2:v>=UWARN?1:0);
+  return {sc,lv:sc>=1?2:sc>=UWARN?1:0,hl,f2:ix.findIndex(v=>v>=1),f1:ix.findIndex(v=>v>=UWARN),m1,m3,m12,times:x.times};
+}
+const uLvAt=k=>{const q=UA[k];if(!q)return -1;if(S.playT==null)return q.lv;return q.hl[Math.min(q.hl.length-1,Math.floor(S.playT))]??0;};
+const DETOUR=location.protocol.startsWith('http')&&!/claude|anthropic/.test(location.hostname)?'detour.html':'https://claude.ai/artifact/5JfuXczfKRyrt3SQjfebJT';
+const uWhen=q=>{const f=q.lv===2?q.f2:q.lv===1?q.f1:-1;return f>=0&&q.times[f]?KH(q.times[f])+'부터 ':'';};
 const lvAt=(d)=>{const x=A.get(d);if(!x)return -1;if(S.playT==null)return x.lv;return x.hl[Math.min(x.n-1,Math.floor(S.playT))]??0;};
 const cumAt=(arr,t)=>{if(t==null)return arr.reduce((p,v)=>p+v,0);const h=Math.floor(t);let p=0;for(let i=0;i<h&&i<arr.length;i++)p+=arr[i];if(h<arr.length)p+=arr[h]*(t-h);return p;};
 const dongArea=d=>{let s=0;for(const c in d.area)s+=d.area[c];return s;};
@@ -138,6 +155,8 @@ function waterField(){
   WCACHE={key,W,vol};return W;
 }
 const labelEls=DATA.dongs.map(d=>{const e=document.createElement('span');e.className='lab';e.textContent=d.nm;$('#labels').appendChild(e);return e;});
+const uEls=UPD.map((u,k)=>{if(!u.n)return null;const e=document.createElement('button');e.type='button';e.className='umk';e.innerHTML='<i></i><span></span>';e.querySelector('span').textContent=u.nm;
+  e.addEventListener('click',()=>choose(dongByCd.get(u.cd)));$('#labels').appendChild(e);return e;});
 
 const rainClass=I=>I<=0?'비 없음':I<3?'약한 비':I<15?'보통 비':I<30?'강한 비':'매우 강한 비';
 const avgI=()=>{const c=citySeries();return c.length?c.reduce((a,b)=>a+b,0)/c.length:0;};
@@ -172,6 +191,13 @@ function initThree(){
       v.set((d.cx/TW-.5)*SX,(elevAt(d.cx,d.cy)-DEM.min)/1000*S.exag+.15,(d.cy/TH-.5)*SY).project(camera);
       if(v.z>1){e.hidden=true;return;}e.hidden=false;e.style.transform=`translate(${((v.x+1)/2*w).toFixed(1)}px,${((1-v.y)/2*h).toFixed(1)}px) translate(-50%,-50%)`;
       e.classList.toggle('on',S.sel===d);});
+    const near=camera.position.distanceTo(controls.target)<20;
+    UPD.forEach((u,k)=>{const e=uEls[k];if(!e)return;if(!S.under){e.hidden=true;return;}
+      v.set((u.px/TW-.5)*SX,(elevAt(u.px,u.py)-DEM.min)/1000*S.exag+.05,(u.py/TH-.5)*SY).project(camera);
+      if(v.z>1){e.hidden=true;return;}e.hidden=false;const lv=Math.max(0,uLvAt(k));
+      e.className='umk l'+lv+(show&&(S.sel.cd===u.cd||(lv>0&&near))?' nm':'');
+      e.title=`${u.nm} · ${ULVN[lv]}`;
+      e.style.transform=`translate(${((v.x+1)/2*w).toFixed(1)}px,${((1-v.y)/2*h).toFixed(1)}px) translate(-6px,-50%)`;});
   }
   function overlay(){const w=box.clientWidth;if(window.innerWidth<=1000)return {L:0,R:0,B:0,k:1};
     const st=box.getBoundingClientRect(),tl=$('.tools').getBoundingClientRect(),sd=$('.side').getBoundingClientRect(),sb=$('#statbar').getBoundingClientRect();
@@ -229,6 +255,7 @@ function drawLegend(){const L=$('#legend');
 function segment(el,items,key,cb){el.innerHTML=items.map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${String(S[key])===String(v)}">${l}</button>`).join('');
   el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S[key]=b.dataset.v;el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));cb();}));}
 segment($('#mode'),[['lc','토지피복'],['level','위험 단계'],['rain','강수량']],'mode',paint);
+$('#detourLink').href=DETOUR;$('#under').checked=S.under;$('#under').addEventListener('change',e=>{S.under=e.target.checked;if(three)three.render();});
 $('#water').checked=S.water;$('#water').addEventListener('change',e=>{S.water=e.target.checked;paint();});
 const dsel=$('#dong');
 ['처인구','기흥구','수지구'].forEach(g=>{const og=document.createElement('optgroup');og.label=g;DATA.dongs.filter(d=>d.gu===g).sort((a,b)=>a.nm.localeCompare(b.nm,'ko')).forEach(d=>{const o=document.createElement('option');o.value=d.cd;o.textContent=d.nm;og.appendChild(o);});dsel.appendChild(og);});
@@ -284,8 +311,19 @@ function renderSide(){
     (()=>{const p=DUNCHI.filter(q=>q.dong===d.nm);
       if(p.length) return ['park','둔치 주차장',p.map(q=>`<b>${q.nm}</b> · ${q.river} · ${q.spaces}대 · 위험 ${q.risk} (출입구 구역 ${q.parts}곳). ${lv>=2?'지금 바로 차를 옮기세요. 둔치는 가장 먼저 잠겨요.':lv>=1?'비 오기 전에 차를 옮겨 두세요.':'큰 비 예보 때는 이용을 피하세요.'}`).join('<br>'),false];
       return ['park','둔치 주차장',`이 동네에는 등록된 둔치 주차장이 없어요. 용인시 등록 1곳: ${DUNCHI.map(q=>q.nm+' ('+q.dong+')').join(', ')}.`,false];})(),
-    ['tunnel','지하차도','경기도 도로대장 지하차도 자료를 연결하면 동네 지하차도 목록을 보여드려요.',true]];
-  $('#places').innerHTML=rows.map(([ic,t,ds,p])=>`<div class="place"><div class="ic" style="color:${warn&&!p?LVC[lv]:'var(--muted)'}">${IC[ic]}</div><div><div class="t">${t}${p?'<span class="pend">자료 연결 예정</span>':''}</div><div class="d">${ds}</div></div></div>`).join('');
+    (()=>{const ks=UPD.map((u,k)=>k).filter(k=>UPD[k].cd===d.cd), nk=ks.filter(k=>UPD[k].n), un=ks.length-nk.length;
+      const lvU=Math.max(-1,...ks.map(k=>UA[k]?UA[k].lv:-1));
+      const link=`<a href="${DETOUR}" target="_blank" rel="noopener">우회 경로 보기</a>`;
+      const line=k=>{const u=UPD[k],q=UA[k];if(!q)return `<b>${u.nm}</b>`;
+        return `<b>${u.nm}</b> <span class="lvtag u${q.lv}">${ULVN[q.lv]}</span> ${q.lv===2?`${uWhen(q)}통제될 수 있어요. 들어가지 말고 돌아가세요.`:q.lv===1?`${uWhen(q)}물이 고일 수 있어요. 바닥에 물이 보이면 들어가지 마세요.`:`통제 기준의 ${Math.round(q.sc*100)}%`}${u.low<0.2?' · 주변보다 낮은 곳':''}`;};
+      let ds;
+      if(nk.length) ds=nk.map(line).join('<br>')+(un?`<br>이름 없는 지하 구간·굴다리 ${un}곳도 같은 비 기준으로 봐요.`:'');
+      else if(un) ds=`이름 없는 지하 구간·굴다리 ${un}곳이 있어요. ${UA[ks[0]]?`지금 ${ULVN[UA[ks[0]].lv]} 단계예요.`:''}`;
+      else{const near=UPD.map((u,k)=>[k,Math.hypot(u.px-d.cx,u.py-d.cy)]).filter(([k])=>UPD[k].n).sort((a,b)=>a[1]-b[1])[0];
+        ds=`이 동네에는 등록된 지하차도가 없어요.${near?` 가까운 곳: <b>${UPD[near[0]].nm}</b> (${dongByCd.get(UPD[near[0]].cd).nm}, 약 ${fmt(near[1]*20/1000,1)}km)${UA[near[0]]?` <span class="lvtag u${UA[near[0]].lv}">${ULVN[UA[near[0]].lv]}</span>`:''}`:''}`;}
+      if(lvU===2) ds+=`<br>${link}`;
+      return ['tunnel','지하차도',ds,false,lvU];})()];
+  $('#places').innerHTML=rows.map(([ic,t,ds,p,ul])=>`<div class="place"><div class="ic" style="color:${ul!=null?(ul>0?LVC[ul]:'var(--muted)'):warn&&!p?LVC[lv]:'var(--muted)'}">${IC[ic]}</div><div><div class="t">${t}${p?'<span class="pend">자료 연결 예정</span>':''}</div><div class="d">${ds}</div></div></div>`).join('');
   $('#guideAll').innerHTML=TODO.map((l,k)=>`<section class="panel"><div class="phead"><h2><span class="lvtag l${k}">${LVN[k]}</span> 단계</h2></div><ul class="todo">${l.map((t,i)=>`<li><b>${i+1}</b><span>${t}</span></li>`).join('')}</ul></section>`).join('');
 }
 function renderRank(){
@@ -293,6 +331,9 @@ function renderRank(){
   const m=Math.max(30,...arr.map(a=>a.x?a.x.r3:0));
   $('#rank').innerHTML=arr.map((a,k)=>{const lv=a.x?a.x.lv:-1;return `<button type="button" class="rk${S.sel===a.d?' sel':''}" data-cd="${a.d.cd}"><span class="n">${k+1}</span><span>${a.d.nm}</span><span class="track"><span class="fill" style="display:block;width:${a.x?Math.min(100,a.x.r3/m*100):0}%;background:${lv<0?'#b9c0c4':LVC[lv]}"></span></span><span class="val">${a.x?`<span class="lvtag l${lv}">${LVN[lv]}</span>`:'-'}</span></button>`;}).join('');
   $('#rank').querySelectorAll('.rk').forEach(b=>b.addEventListener('click',()=>choose(DATA.dongs.find(d=>d.cd===b.dataset.cd))));
+  const ul=UPD.map((u,k)=>k).filter(k=>UPD[k].n).sort((a,b)=>((UA[b]?.sc||0)-(UA[a]?.sc||0)));
+  $('#urank').innerHTML=ul.map(k=>{const u=UPD[k],q=UA[k],lv=q?q.lv:-1;return `<button type="button" class="rk${S.sel.cd===u.cd?' sel':''}" data-cd="${u.cd}"><span class="n"></span><span>${u.nm}<small style="display:block;color:var(--muted);font-size:11px">${dongByCd.get(u.cd).nm}${q&&lv>0&&uWhen(q)?' · '+uWhen(q).trim().replace('부터','~'):''}</small></span><span class="track"><span class="fill" style="display:block;width:${q?Math.min(100,q.sc*100):0}%;background:${lv<0?'#b9c0c4':LVC[lv]}"></span></span><span class="val">${q?`<span class="lvtag u${lv}">${ULVN[lv]}</span>`:'-'}</span></button>`;}).join('');
+  $('#urank').querySelectorAll('.rk').forEach(b=>b.addEventListener('click',()=>choose(dongByCd.get(b.dataset.cd))));
 }
 function renderStats(){
   const X=src(), xs=DATA.dongs.map(d=>({d,x:A.get(d)}));
@@ -312,7 +353,8 @@ function renderStats(){
     ['24시간 평균 강수',fmt(tot,1),'mm',`최대 ${fmt(mxh,1)} mm/h · ${rainClass(mxh)}`],
     scen()?(()=>{const t=xs.filter(a=>a.x).sort((a,b)=>b.x.q-a.x.q)[0];return ['유출이 가장 큰 동',t?t.d.nm:'-','',t?`예상 유출고 ${fmt(t.x.q,1)} mm`:''];})():['가장 센 3시간',top?top.d.nm:'-','',top?`${fmt(top.x.r3,1)} mm`:''],
     ['가장 빠른 주의',early?KH(early.x.times[early.x.first]):'없음','',early?early.d.nm:'24시간 안에 없음'],
-    ['직전 1시간 관측',om==null?'-':fmt(om,1),om==null?'':'mm',scen()?'시나리오에는 없음':'38개 동 평균 (초단기실황)'],
+    (()=>{const nm=UPD.map((u,k)=>k).filter(k=>UPD[k].n&&UA[k]),c2=nm.filter(k=>uLvAt(k)===2).length,c1=nm.filter(k=>uLvAt(k)===1).length;
+      return ['지하차도 통제 검토',String(c2),'곳',c1?`주의 ${c1}곳 · 전체 ${nm.length}곳`:`지하차도 ${nm.length}곳 중`];})(),
   ];
   $('#statbar').innerHTML=tiles.map(([k,v,u,s])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div><div class="s">${s}</div></div>`).join('');
 }
