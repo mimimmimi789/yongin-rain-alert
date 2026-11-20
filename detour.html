@@ -510,7 +510,7 @@ function draw(){if(drawPending)return;drawPending=true;requestAnimationFrame(()=
 const BASE={map:{url:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`,attr:'바탕 지도 © OpenStreetMap 기여자'},
   sat:{url:(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,attr:'위성 © Esri, Maxar, Earthstar Geographics'}};
 let baseMode='map'; try{baseMode=localStorage.getItem('yr-base')||'map';}catch(e){}
-const tiles=new Map(); let tileOk={map:false,sat:false};
+const tiles=new Map(); let tileOk={map:false,sat:false}, tileErr={map:0,sat:0};
 const ll2t=(lat,lon,z)=>{const n=2**z,r=lat*Math.PI/180;return [(lon+180)/360*n,(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n];};
 const t2ll=(x,y,z)=>{const n=2**z;return [Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI,x/n*360-180];};
 const llScr=(la,lo)=>{const [X,Y]=toTM(la,lo);return [sx(X),sy(Y)];};
@@ -523,7 +523,7 @@ function drawTiles(){
   if(tiles.size>600)tiles.clear();
   for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
     const key=baseMode+z+'/'+tx+'/'+ty; let im=tiles.get(key);
-    if(!im){im=new Image();const m=baseMode;im.onload=()=>{tileOk[m]=true;draw();};im.src=B.url(z,tx,ty);tiles.set(key,im);}
+    if(!im){im=new Image();const m=baseMode;im.onload=()=>{tileOk[m]=true;draw();};im.onerror=()=>{tileErr[m]++;if(!tileOk[m]&&tileErr[m]===3&&baseMode===m)$('attr').textContent='이 화면에서는 바탕 지도를 불러올 수 없어요 (외부 지도 차단) · 단순 지도로 표시 중';};im.src=B.url(z,tx,ty);tiles.set(key,im);}
     if(!(im.complete&&im.naturalWidth))continue;
     const a=llScr(...t2ll(tx,ty,z)),b=llScr(...t2ll(tx+1,ty,z)),d=llScr(...t2ll(tx,ty+1,z));
     ctx.setTransform(dpr*(b[0]-a[0])/256,dpr*(b[1]-a[1])/256,dpr*(d[0]-a[0])/256,dpr*(d[1]-a[1])/256,dpr*a[0],dpr*a[1]);
