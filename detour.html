@@ -112,6 +112,12 @@ details p{font-size:12px;color:var(--muted);margin:6px 0}
 #routeSec h3{font-size:16px}#routeSec .detour{border-width:2px}#routeSec .rc b{font-size:19px}#routeSec .rc span{font-size:11.5px}
 #routeSec .detour>b:first-child{font-size:15px}
 .side.right{width:300px}
+.ptabs{display:flex;margin-top:18px;border:1px solid var(--line);border-radius:6px;overflow:hidden;position:sticky;top:0;z-index:2;background:var(--surface)}
+.ptabs button{flex:1;border:0;background:var(--surface);color:var(--ink);padding:10px 6px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+.ptabs button+button{border-left:1px solid var(--line)}
+.ptabs button.on{background:var(--route);color:#fff}
+.ptabs b{font-weight:700;opacity:.85;margin-left:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .legend.in{position:static;border:0;padding:0;background:none}
 @media (max-width:1180px){.side.right{width:260px}.side.left{width:340px}}
 .hero{padding-top:18px}.hero h2{font-size:19px;margin:0 0 4px;letter-spacing:-.02em}.hero .lead{font-size:13px;color:var(--muted);margin:0 0 12px}.hero .lead b{color:var(--ink)}
@@ -179,15 +185,16 @@ code{font-size:11.5px;background:var(--surface-2);padding:1px 4px;border-radius:
         <div id="myroute"></div>
         <p class="note" id="routeHint">위 검색창에 출발지와 도착지를 넣으면, 경로 위 지하차도·산사태 위험 구간과 비가 집중되는 시간을 여기에 보여 드려요.</p>
       </section>
-      <section class="psec">
-        <h3>지하차도</h3>
+      <div class="ptabs" role="tablist" aria-label="주의 장소 종류"><button type="button" role="tab" id="tabU" class="on" aria-selected="true">지하차도 <b id="tabUn"></b></button><button type="button" role="tab" id="tabL" aria-selected="false">산사태 위험 도로 <b id="tabLn"></b></button></div>
+      <section class="psec" id="secU" role="tabpanel">
+        <h3 class="sr">지하차도</h3>
         <div class="status" id="uStatus"></div>
         <div class="list" id="uList"></div>
         <label class="uchk"><input type="checkbox" id="uAll"> <span id="uAllTxt">이름 없는 지하 구간·굴다리도 보기</span></label>
         <div id="uDetour"></div>
       </section>
-      <section class="psec">
-        <h3>산사태 위험 도로</h3>
+      <section class="psec" id="secL" role="tabpanel" hidden>
+        <h3 class="sr">산사태 위험 도로</h3>
         <div class="status" id="status"></div>
         <div class="list" id="list"></div>
         <div id="detour"></div>
@@ -625,7 +632,7 @@ function renderU(){
 function zoomTo(es,det){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;const add=i=>geom(i).forEach(p=>{x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1]);});
   es.forEach(add); if(det)det.es.forEach(h=>add(h>>1)); const pad=Math.max(400,(x1-x0)*0.1); fit(x0-pad,y0-pad,x1+pad,y1+pad,40);}
 function selectU(k,zoom){
-  selU=k; selGroup=-1; uAvoidSel=false; detourPath=null; const u=UP[k];
+  setTab('U'); selU=k; selGroup=-1; uAvoidSel=false; detourPath=null; const u=UP[k];
   if(zoom)zoomTo(u.es,null);
   renderList();renderU();draw();
   $('uDetour').scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -640,7 +647,7 @@ function renderUDetour(){
   $('uAvoidBtn').onclick=()=>{uAvoidSel=!uAvoidSel;detourPath=uAvoidSel?groupDetour({es:u.es}):null;if(uAvoidSel&&detourPath)zoomTo(u.es,detourPath.det);renderUDetour();draw();};
 }
 function selectGroup(k,zoom){
-  selGroup=k; selU=-1; const g=groups[k]; detourPath=groupDetour(g);
+  setTab('L'); selGroup=k; selU=-1; const g=groups[k]; detourPath=groupDetour(g);
   if(zoom)zoomTo(g.es,detourPath.det);
   renderList();renderU();draw();
   $('detour').scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -793,7 +800,12 @@ async function doSearch(){
 $('srchForm').onsubmit=e=>{e.preventDefault();doSearch();};
 $('swapQ').onclick=()=>{const a=$('qS').value;$('qS').value=$('qT').value;$('qT').value=a;if($('qS').value&&$('qT').value)doSearch();};
 document.querySelectorAll('#routeEmpty button').forEach(b=>b.onclick=()=>{$('qS').value=b.dataset.s;$('qT').value=b.dataset.t;doSearch();});
-function refresh(){evaluate();renderRain();renderList();renderU();renderHist();if(myRoute&&myRoute.t!=null)calcMyRoute();renderMyRoute();draw();}
+
+let pTab='U';
+function setTab(t){pTab=t;$('tabU').classList.toggle('on',t==='U');$('tabL').classList.toggle('on',t==='L');$('tabU').setAttribute('aria-selected',t==='U');$('tabL').setAttribute('aria-selected',t==='L');$('secU').hidden=t!=='U';$('secL').hidden=t!=='L';}
+$('tabU').onclick=()=>setTab('U');$('tabL').onclick=()=>setTab('L');
+function tabCounts(){const nu=UP.map((u,k)=>k).filter(k=>uVisible(k)&&uInfo[k].heavy).length;$('tabUn').textContent=nu?nu:'';$('tabLn').textContent=groups.length?groups.length:'';}
+function refresh(){evaluate();renderRain();renderList();renderU();tabCounts();renderHist();if(myRoute&&myRoute.t!=null)calcMyRoute();renderMyRoute();draw();}
 
 /* ---------- 시작 ---------- */
 $('uAll').onchange=e=>{uAll=e.target.checked;renderU();draw();};
