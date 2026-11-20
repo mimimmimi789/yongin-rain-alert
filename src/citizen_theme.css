@@ -152,3 +152,5 @@ ul.todo li b{display:none}
 @media (max-width:1000px){.helpbtn{right:12px;bottom:112px}.helpbox{left:50%}}
 @media (max-width:1000px){.hud{left:auto;top:auto}.statbar{left:auto;right:auto;height:auto}.fpanel{width:auto;max-width:100%}.panpad{right:12px}.fpanel.tools{order:2}.statbar{order:3}}
 
+
+.padv .pofc{display:inline-block;margin-right:4px;padding:0 5px;border:1px solid currentColor;border-radius:3px;font-size:11.5px;font-weight:700;opacity:.85}
