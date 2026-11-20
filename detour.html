@@ -96,6 +96,10 @@ details p{font-size:12px;color:var(--muted);margin:6px 0}
 .strip i.h1{background:var(--route);opacity:.55}.strip i.h2{background:var(--amber)}.strip i.dep{outline:2px solid var(--ink);outline-offset:-1px}
 .stripx{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
 .uol{margin:6px 0 0;padding-left:18px}.uol li{margin:3px 0}.uol small{color:var(--muted)}
+.srch{display:grid;gap:6px;margin-bottom:8px}.srch label{display:flex;gap:8px;align-items:center;font-size:12.5px;font-weight:700}
+.srch input{flex:1;min-width:0;font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--ink)}
+.srch .pick{display:block;width:100%;text-align:left;margin-top:4px;padding:6px 8px;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;cursor:pointer}
+.srch .pick small{color:var(--muted)}
 .bar{height:4px;background:var(--surface-2);border-radius:2px;margin-top:6px;overflow:hidden}.bar i{display:block;height:100%}
 code{font-size:11.5px;background:var(--surface-2);padding:1px 4px;border-radius:2px}
 @media (max-width:860px){
@@ -157,6 +161,12 @@ code{font-size:11.5px;background:var(--surface-2);padding:1px 4px;border-radius:
       </section>
       <section class="psec">
         <h3>내 경로 확인</h3>
+        <form class="srch" id="srchForm" autocomplete="off">
+          <label>출발 <input id="qS" placeholder="장소·주소 (예: 용인시청)"></label>
+          <label>도착 <input id="qT" placeholder="장소·주소 (예: 수지구청역)"></label>
+          <button class="btn primary" type="submit">경로 찾기</button>
+          <div id="srchRes"></div>
+        </form>
         <div class="row">
           <button class="btn" id="pickRoute">지도에서 출발·도착 찍기</button>
           <button class="btn" id="clearRoute">지우기</button>
@@ -691,6 +701,50 @@ $('expHist').onclick=()=>{
   $('csvCopy').onclick=()=>{const ta=$('csvOut');navigator.clipboard.writeText(ta.value).then(()=>{$('csvCopy').textContent='복사됨';}).catch(()=>{ta.select();});};
   $('csvClose').onclick=()=>{el.innerHTML='';};
 };
+
+/* ---------- 장소·주소 검색 (카카오 로컬, 등록 도메인에서만 동작) ---------- */
+const KAKAO_JS_KEY='e1f4686d6a17142b6a7da9ea0bed6d95';
+let kk=null;
+function kakaoReady(){
+  if(kk)return kk;
+  kk=new Promise((ok,no)=>{
+    if(!/^https?:/.test(location.protocol)){no(new Error('file'));return;}
+    const sc=document.createElement('script');
+    sc.src='https://dapi.kakao.com/v2/maps/sdk.js?appkey='+KAKAO_JS_KEY+'&libraries=services&autoload=false';
+    sc.onload=()=>{try{kakao.maps.load(()=>ok({pl:new kakao.maps.services.Places(),gc:new kakao.maps.services.Geocoder()}));}catch(e){no(e);}};
+    sc.onerror=()=>no(new Error('load'));
+    document.head.appendChild(sc);
+    setTimeout(()=>no(new Error('timeout')),8000);
+  });
+  kk.catch(()=>{kk=null;});
+  return kk;
+}
+const inYongin=(x,y)=>x>=bx0-2000&&x<=bx1+2000&&y>=by0-2000&&y<=by1+2000&&dongOf(x,y)>=0;
+async function searchPlace(q){
+  const K=await kakaoReady(), opt={rect:'126.98,37.04,127.47,37.39',size:8};
+  const kw=await new Promise(r=>K.pl.keywordSearch(q,(d,st)=>r(st===kakao.maps.services.Status.OK?d:[]),opt));
+  let out=kw.map(d=>({nm:d.place_name,sub:d.road_address_name||d.address_name,lat:+d.y,lon:+d.x}));
+  if(!out.length){const ad=await new Promise(r=>K.gc.addressSearch(q,(d,st)=>r(st===kakao.maps.services.Status.OK?d:[])));out=ad.map(d=>({nm:d.address_name,sub:d.road_address?d.road_address.address_name:'',lat:+d.y,lon:+d.x}));}
+  return out.map(o=>{const [x,y]=toTM(o.lat,o.lon);return {...o,x,y};}).filter(o=>inYongin(o.x,o.y)).slice(0,5);
+}
+const pickSel={s:null,t:null};
+async function doSearch(){
+  const res=$('srchRes'), qs=$('qS').value.trim(), qt=$('qT').value.trim();
+  if(!qs||!qt){res.innerHTML='<p class="note">출발과 도착을 모두 입력해 주세요.</p>';return;}
+  res.innerHTML='<p class="note">찾는 중…</p>';
+  let A,B;
+  try{[A,B]=await Promise.all([searchPlace(qs),searchPlace(qt)]);}
+  catch(e){res.innerHTML=`<p class="note">${e.message==='file'?'PC 파일로 열면 검색이 안 돼요.':'지금 검색을 쓸 수 없어요.'} 아래 "지도에서 출발·도착 찍기"를 써 주세요.</p>`;return;}
+  if(!A.length||!B.length){res.innerHTML=`<p class="note">용인시 안에서 "${esc(!A.length?qs:qt)}"를 찾지 못했어요. 다른 이름이나 주소로 해 보세요.</p>`;return;}
+  pickSel.s=A[0];pickSel.t=B[0];
+  const list=(L,k)=>L.length>1?`<div style="margin-top:6px;font-size:12px;font-weight:700">${k==='s'?'출발':'도착'} 다른 후보</div>`+L.slice(1).map((o,i)=>`<button type="button" class="pick" data-k="${k}" data-i="${i+1}">${esc(o.nm)} <small>${esc(o.sub)}</small></button>`).join(''):'';
+  const show=()=>{res.innerHTML=`<p class="note" style="margin-top:2px"><b>출발</b> ${esc(pickSel.s.nm)} → <b>도착</b> ${esc(pickSel.t.nm)}</p>`+list(A,'s')+list(B,'t');
+    res.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{pickSel[b.dataset.k]=(b.dataset.k==='s'?A:B)[+b.dataset.i];go();});};
+  const go=()=>{setMode(null);myRoute={s:nearestVert(pickSel.s.x,pickSel.s.y),t:nearestVert(pickSel.t.x,pickSel.t.y)};calcMyRoute();renderMyRoute();
+    if(myRoute.r)zoomTo([],myRoute.r);draw();show();};
+  go();
+}
+$('srchForm').onsubmit=e=>{e.preventDefault();doSearch();};
 function refresh(){evaluate();renderRain();renderList();renderU();renderHist();if(myRoute&&myRoute.t!=null)calcMyRoute();renderMyRoute();draw();}
 
 /* ---------- 시작 ---------- */
