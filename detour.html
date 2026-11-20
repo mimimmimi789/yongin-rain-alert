@@ -112,6 +112,40 @@ details p{font-size:12px;color:var(--muted);margin:6px 0}
 #routeSec h3{font-size:16px}#routeSec .detour{border-width:2px}#routeSec .rc b{font-size:19px}#routeSec .rc span{font-size:11.5px}
 #routeSec .detour>b:first-child{font-size:15px}
 .side.right{width:300px}
+.basesw{position:absolute;left:12px;top:12px;display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.15);z-index:2}
+.basesw button{border:0;background:var(--surface);color:var(--ink);padding:7px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.basesw button+button{border-left:1px solid var(--line)}.basesw button.on{background:var(--ink);color:var(--surface)}
+.attr{position:absolute;right:0;bottom:0;background:rgba(255,255,255,.8);color:#333;font-size:10.5px;padding:1px 6px;pointer-events:none}
+.attr:empty{display:none}
+.modebar{top:56px!important}
+.nav{margin-top:2px}
+.navhead{border-radius:8px;padding:12px 14px;background:var(--ok);color:#fff}
+.navhead.l1{background:var(--amber);color:#1d2329}.navhead.l0{background:var(--route);color:#fff}
+.navhead .big{font-size:20px;font-weight:800;letter-spacing:-.02em}.navhead .vs{font-size:13px;margin-top:2px}
+.navhead .meta{font-size:12.5px;margin-top:6px;opacity:.9}
+.navhead .c3{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.navhead .c3 span{background:rgba(255,255,255,.25);border-radius:10px;padding:2px 9px;font-size:12px;font-weight:700}
+.navhead.l1 .c3 span{background:rgba(0,0,0,.1)}
+.alt{margin-top:10px;border-radius:8px;padding:10px 12px;font-size:13px;border:2px solid var(--red);background:var(--red-bg)}
+.alt.u{border-color:var(--route);background:color-mix(in srgb,var(--route) 8%,var(--surface))}
+.alt .at{font-weight:800;font-size:14px;margin-bottom:4px}
+.alt .ln{display:flex;gap:8px;align-items:baseline;margin-top:3px}.alt .ln>span{flex:none;width:44px;font-size:11.5px;color:var(--muted)}
+.alt s{color:var(--red);font-weight:700}.alt .via{color:var(--ok)}
+.alt .btn{margin-top:8px;border-color:var(--route);color:var(--route);font-weight:700}
+.steps{list-style:none;margin:14px 0 0;padding:0}
+.st{position:relative;padding:0 0 16px 28px;font-size:14px}
+.st::before{content:'';position:absolute;left:8px;top:16px;bottom:-2px;width:4px;background:var(--route);border-radius:2px}
+.st.end::before{display:none}.st.hz::before{background:linear-gradient(var(--route),var(--amber))}
+.st>i{position:absolute;left:1px;top:2px;width:18px;height:18px;border-radius:50%;background:var(--surface);border:4px solid var(--route)}
+.st.start>i{background:var(--route)}.st.end>i{background:var(--ink);border-color:var(--ink)}.st.hz>i{border-color:var(--amber)}
+.st small{color:var(--muted);font-size:12px}
+.hzr{margin-top:7px;border-radius:6px;padding:8px 10px 8px 38px;position:relative;background:var(--surface-2);font-size:12.5px;cursor:pointer}
+.hzr.warn{background:var(--amber-bg);border:1px solid var(--amber)}
+.hzr .no{position:absolute;left:9px;top:8px;width:21px;height:21px;border-radius:50%;background:var(--route);color:#fff;font-weight:800;font-size:12px;text-align:center;line-height:21px}
+.hzr.warn .no{background:var(--amber);color:#1d2329}
+.hzr b{display:block;font-size:13.5px}.hzr small{display:block;color:var(--ink);opacity:.8;font-size:12px}
+.rainx{margin-top:4px;border-top:1px solid var(--line);padding-top:8px}.rainx summary{font-weight:700;color:var(--ink);font-size:13px}
+.rainx summary span{font-weight:400;color:var(--ok);margin-left:6px;font-size:12px}.rainx summary span.w{color:var(--amber);font-weight:700}
+
 .ptabs{display:flex;margin-top:18px;border:1px solid var(--line);border-radius:6px;overflow:hidden;position:sticky;top:0;z-index:2;background:var(--surface)}
 .ptabs button{flex:1;border:0;background:var(--surface);color:var(--ink);padding:10px 6px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
 .ptabs button+button{border-left:1px solid var(--line)}
@@ -202,6 +236,8 @@ code{font-size:11.5px;background:var(--surface-2);padding:1px 4px;border-radius:
     </aside>
     <div class="mapbox" id="mapbox">
       <canvas id="cv" aria-label="용인시 도로 산사태 위험 지도"></canvas>
+      <div class="basesw" role="group" aria-label="바탕 지도"><button type="button" data-b="map">지도</button><button type="button" data-b="sat">위성</button><button type="button" data-b="none">단순</button></div>
+      <div class="attr" id="attr"></div>
       <div class="modebar" id="modebar"></div>
       <div class="zoom"><button id="zin" aria-label="확대">+</button><button id="zout" aria-label="축소">−</button><button id="zfit" aria-label="전체 보기" style="font-size:13px">전체</button></div>
       <div class="tip" id="tip" hidden></div>
@@ -246,7 +282,7 @@ code{font-size:11.5px;background:var(--surface-2);padding:1px 4px;border-radius:
         <p class="note" style="margin-top:0">도로를 30m 간격으로 나눠, 바로 옆 비탈면의 <b>경사</b>(90m DEM, 주변 최대값)와 <b>산림 비율</b>(토지피복도)로 사면 취약도를 매깁니다. 여기에 산사태 이력 가중치를 더하고, 해당 읍면동의 <b>기상청 예보 강우</b>(24시간 누적, 3시간 누적, 최대 시간강우)를 곱해 단계를 정합니다. 터널 구간은 제외하고 교량은 절반만 반영합니다.</p>
         <p class="note"><b>지하차도</b>: 강우량이나 SCS-CN 유출량만으로는 개별 지하차도의 침수를 알 수 없습니다(주변 지형, 배수시설, 집수구역, 수위 자료가 필요). 그래서 이 지도는 침수·통제를 판정하지 않습니다. 지하차도가 있는 읍면동 예보에서 <b>시간당 30mm 또는 3시간 60mm 이상</b>인 시간을 <b>강한 비 시간대</b>로 보여 줄 뿐이고, 통행 가능 여부는 <b>공식 통제 정보</b>(연동 전: 확인 필요)를 따릅니다. 위치는 오픈스트리트맵에서 뽑은 지하차도 15곳과 이름 없는 지하 구간·굴다리입니다. "주변보다 낮은 곳"은 90m 지형 기준 참고 정보입니다.</p>
         <p class="note">산사태 단계는 임시 기준이며 산림청 산사태 예·경보, 지자체 통제와 다를 수 있습니다. 실제 통제 여부는 용인시·경찰 안내를 따르세요.</p>
-        <p class="note">도로·지하차도: © OpenStreetMap 기여자 (ODbL). 지형: 국토지리정보원 90m DEM. 강우: 기상청 단기예보.</p>
+        <p class="note">도로·지하차도·바탕 지도: © OpenStreetMap 기여자 (ODbL). 위성사진: Esri World Imagery. 지형: 국토지리정보원 90m DEM. 강우: 기상청 단기예보.</p>
       </details>
     </aside>
   </div>
@@ -470,15 +506,43 @@ const wx=px=>px/view.s+view.x, wy=py=>view.y-py/view.s;
 function path(i){const g=geom(i);ctx.moveTo(sx(g[0][0]),sy(g[0][1]));for(let k=1;k<g.length;k++)ctx.lineTo(sx(g[k][0]),sy(g[k][1]));}
 let drawPending=false;
 function draw(){if(drawPending)return;drawPending=true;requestAnimationFrame(()=>{drawPending=false;render();});}
+/* ---------- 바탕 지도 타일 (일반 지도·위성) ---------- */
+const BASE={map:{url:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`,attr:'바탕 지도 © OpenStreetMap 기여자'},
+  sat:{url:(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,attr:'위성 © Esri, Maxar, Earthstar Geographics'}};
+let baseMode='map'; try{baseMode=localStorage.getItem('yr-base')||'map';}catch(e){}
+const tiles=new Map(); let tileOk={map:false,sat:false};
+const ll2t=(lat,lon,z)=>{const n=2**z,r=lat*Math.PI/180;return [(lon+180)/360*n,(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n];};
+const t2ll=(x,y,z)=>{const n=2**z;return [Math.atan(Math.sinh(Math.PI*(1-2*y/n)))*180/Math.PI,x/n*360-180];};
+const llScr=(la,lo)=>{const [X,Y]=toTM(la,lo);return [sx(X),sy(Y)];};
+function drawTiles(){
+  const B=BASE[baseMode]; if(!B)return false;
+  let z=Math.round(Math.log2(156543.03*Math.cos(37.25*Math.PI/180)*view.s)); z=Math.max(8,Math.min(18,z));
+  const c=[[0,0],[W,0],[0,Hh],[W,Hh]].map(([px,py])=>{const [la,lo]=fromTM(wx(px),wy(py));return ll2t(la,lo,z);});
+  const x0=Math.floor(Math.min(...c.map(a=>a[0]))),x1=Math.floor(Math.max(...c.map(a=>a[0]))),y0=Math.floor(Math.min(...c.map(a=>a[1]))),y1=Math.floor(Math.max(...c.map(a=>a[1])));
+  if((x1-x0+1)*(y1-y0+1)>160)return tileOk[baseMode];
+  if(tiles.size>600)tiles.clear();
+  for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+    const key=baseMode+z+'/'+tx+'/'+ty; let im=tiles.get(key);
+    if(!im){im=new Image();const m=baseMode;im.onload=()=>{tileOk[m]=true;draw();};im.src=B.url(z,tx,ty);tiles.set(key,im);}
+    if(!(im.complete&&im.naturalWidth))continue;
+    const a=llScr(...t2ll(tx,ty,z)),b=llScr(...t2ll(tx+1,ty,z)),d=llScr(...t2ll(tx,ty+1,z));
+    ctx.setTransform(dpr*(b[0]-a[0])/256,dpr*(b[1]-a[1])/256,dpr*(d[0]-a[0])/256,dpr*(d[1]-a[1])/256,dpr*a[0],dpr*a[1]);
+    ctx.drawImage(im,0,0,257,257);
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return tileOk[baseMode];
+}
 function render(){
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=C['--map'];ctx.fillRect(0,0,W,Hh);
+  const based=drawTiles();
   ctx.lineJoin='round';ctx.lineCap='round';
   // 읍면동
-  ctx.strokeStyle=C['--dong'];ctx.lineWidth=1;
+  ctx.strokeStyle=based?(baseMode==='sat'?'rgba(255,255,255,.55)':'rgba(40,50,70,.35)'):C['--dong'];ctx.lineWidth=based?1.2:1;ctx.setLineDash(based?[5,4]:[]);
   for(const d of DG){ctx.beginPath();for(const r of d.rings){ctx.moveTo(sx(r[0][0]),sy(r[0][1]));for(const p of r)ctx.lineTo(sx(p[0]),sy(p[1]));ctx.closePath();}ctx.stroke();}
+  ctx.setLineDash([]);
   const z=view.s*1000; // px per km
-  // 도로 (등급별)
-  for(let c=5;c>=0;c--){
+  // 도로 (등급별) - 바탕 지도가 있으면 생략
+  for(let c=5;c>=0&&!based;c--){
     ctx.beginPath(); let any=false;
     for(let i=0;i<nE;i++){if(E[i][3]%10!==c||lvl[i])continue; path(i);any=true;}
     if(!any)continue;
@@ -494,9 +558,11 @@ function render(){
   // 선택 그룹
   if(selGroup>=0){const g=groups[selGroup];ctx.beginPath();g.es.forEach(path);ctx.strokeStyle=C['--ink'];ctx.lineWidth=Math.max(6,Math.min(11,3*Math.sqrt(z/25)));ctx.globalAlpha=.25;ctx.stroke();ctx.globalAlpha=1;}
   // 경로
-  const drawRoute=(r,dash)=>{if(!r)return;ctx.beginPath();r.es.forEach(h=>path(h>>1));ctx.setLineDash(dash||[]);ctx.strokeStyle=C['--route'];ctx.lineWidth=Math.max(3,Math.min(7,2*Math.sqrt(z/25)));ctx.stroke();ctx.setLineDash([]);};
+  const drawRoute=(r,dash)=>{if(!r)return;const w=Math.max(5,Math.min(10,2.8*Math.sqrt(z/25)));ctx.beginPath();r.es.forEach(h=>path(h>>1));ctx.setLineDash(dash||[]);ctx.strokeStyle='#fff';ctx.lineWidth=w+4;ctx.stroke();ctx.strokeStyle=C['--route'];ctx.lineWidth=w;ctx.stroke();ctx.setLineDash([]);};
   if(detourPath&&detourPath.det)drawRoute(detourPath.det);
-  if(myRoute&&myRoute.r)drawRoute(myRoute.r);
+  if(myRoute&&myRoute.hit&&myRoute.raw){ctx.beginPath();myRoute.raw.es.forEach(h=>path(h>>1));ctx.setLineDash([6,6]);ctx.strokeStyle=C['--ink'];ctx.globalAlpha=.45;ctx.lineWidth=Math.max(2.5,Math.min(5,1.6*Math.sqrt(z/25)));ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}
+  if(myRoute&&myRoute.r){drawRoute(myRoute.r);
+    const hl=(myRoute.hz||[]).filter(q=>q.t==='l');if(hl.length){ctx.beginPath();hl.forEach(q=>q.es.forEach(path));ctx.strokeStyle=C['--amber'];ctx.lineWidth=Math.max(4,Math.min(9,2.6*Math.sqrt(z/25)));ctx.stroke();}}
   const dot=(v,t)=>{const x=sx(V[v][0]),y=sy(V[v][1]);ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fillStyle=C['--surface'];ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle=C['--route'];ctx.stroke();if(t){ctx.fillStyle=C['--route'];ctx.font='700 12px '+getComputedStyle(document.body).fontFamily;ctx.fillText(t,x+9,y-8);}};
   if(detourPath&&detourPath.det){dot(detourPath.a);dot(detourPath.b);}
   if(myRoute){if(myRoute.s!=null)dot(myRoute.s,'출발');if(myRoute.t!=null)dot(myRoute.t,'도착');}
@@ -506,14 +572,15 @@ function render(){
     if(x<-20||y<-20||x>W+20||y>Hh+20)continue;
     ctx.fillStyle=C['--surface'];ctx.strokeStyle=uc[L];ctx.lineWidth=k===selU?4:L?3:2.2;ctx.beginPath();ctx.rect(x-r,y-r,r*2,r*2);ctx.fill();ctx.stroke();
     if(L){ctx.fillStyle=uc[L];ctx.fillRect(x-r+3,y-r+3,r*2-6,r*2-6);}
-    if(onR&&onR.has(k)){const n=myRoute.uOn.indexOf(k)+1;ctx.beginPath();ctx.arc(x-r-9,y-r-9,9,0,7);ctx.fillStyle=C['--route'];ctx.fill();ctx.fillStyle='#fff';ctx.font='700 11px '+getComputedStyle(document.body).fontFamily;ctx.textAlign='center';ctx.fillText(n,x-r-9,y-r-5);ctx.textAlign='start';}
     if(u.named&&(z>40||L||k===selU||(onR&&onR.has(k)))){ctx.font='600 12px '+getComputedStyle(document.body).fontFamily;ctx.lineWidth=3;ctx.strokeStyle=C['--surface'];ctx.strokeText(u.nm,x+r+4,y+4);ctx.fillStyle=L?uc[L]:C['--ink'];ctx.fillText(u.nm,x+r+4,y+4);}
   }
+  // 경로 위 주의 지점 번호
+  if(myRoute&&myRoute.hz)for(const q of myRoute.hz){const x=sx(q.x)-14,y=sy(q.y)-14;ctx.beginPath();ctx.arc(x,y,11,0,7);ctx.fillStyle=q.warn?C['--amber']:C['--route'];ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=C['--surface'];ctx.stroke();ctx.fillStyle=q.warn?'#1d2329':'#fff';ctx.font='800 12px '+getComputedStyle(document.body).fontFamily;ctx.textAlign='center';ctx.fillText(q.no,x,y+4);ctx.textAlign='start';}
   // 이력 지점
   for(const h of allHist()){if(h.x==null)continue;const x=sx(h.x),y=sy(h.y);ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);ctx.fillStyle=C['--hist'];ctx.strokeStyle=C['--surface'];ctx.lineWidth=1.5;ctx.fillRect(-5,-5,10,10);ctx.strokeRect(-5,-5,10,10);ctx.restore();}
   if(pendingHist){const x=sx(pendingHist.x),y=sy(pendingHist.y);ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.strokeStyle=C['--hist'];ctx.lineWidth=2.5;ctx.stroke();}
   // 동 이름
-  if(z>14){ctx.fillStyle=C['--dongtxt'];ctx.font='12px '+getComputedStyle(document.body).fontFamily;ctx.textAlign='center';for(const d of DG)ctx.fillText(d.nm,sx(d.c[0]),sy(d.c[1]));ctx.textAlign='start';}
+  if(z>14&&(!based||baseMode==='sat')){ctx.fillStyle=based?'#fff':C['--dongtxt'];ctx.font='12px '+getComputedStyle(document.body).fontFamily;ctx.textAlign='center';for(const d of DG)ctx.fillText(d.nm,sx(d.c[0]),sy(d.c[1]));ctx.textAlign='start';}
 }
 
 /* ---------- 상호작용 ---------- */
@@ -682,34 +749,62 @@ function calcMyRoute(){
   myRoute.rain=Array.from({length:n},(_,i)=>Math.max(0,...ser.map(a=>a[i]||0)));
   const hv=Array(n).fill(false); ser.forEach(a=>heavyOf(a).hv.forEach((v,i)=>{if(v)hv[i]=true;}));
   myRoute.hv=hv; myRoute.win=winOf(hv); myRoute.nd=ds.length;
+  // 내비게이션식 구간 + 주의 지점 번호
+  myRoute.steps=navSteps(r); let no=0; myRoute.hz=[];
+  for(const g of myRoute.steps)for(const z of g.hz){z.no=++no;
+    if(z.t==='u'){const q=uInfo[z.k];z.x=UP[z.k].x;z.y=UP[z.k].y;z.warn=!!(q&&q.heavy);}
+    else{const gm=geom(z.i),m=gm[gm.length>>1];z.x=m[0];z.y=m[1];z.warn=true;}
+    myRoute.hz.push(z);}
 }
+function navSteps(r){
+  const st=[];
+  for(const h of r.es){const i=h>>1,n=roadName(i);let g=st[st.length-1];
+    if(!g||g.n!==n){g={n,L:0,hz:[],d:dongName(i)};st.push(g);}
+    g.L+=eLen[i]; const k=eU[i];
+    if(k>=0){if(!g.hz.some(z=>z.t==='u'&&z.k===k))g.hz.push({t:'u',k});}
+    else if(lvl[i]===1){let z=g.hz.find(z=>z.t==='l');if(!z){z={t:'l',L:0,i,es:[]};g.hz.push(z);}z.L+=eLen[i];z.es.push(i);}
+  }
+  const out=[];
+  for(const g of st){g.hz=g.hz.filter(z=>z.t!=='l'||z.L>=60);
+    const p=out[out.length-1];
+    if(p&&(p.n===g.n||(g.L<150&&!g.hz.length))){p.L+=g.L;p.hz.push(...g.hz);continue;}
+    out.push(g);}
+  return out;
+}
+const roadLens=r=>{const m=new Map();for(const h of r.es){const n=roadName(h>>1);m.set(n,(m.get(n)||0)+eLen[h>>1]);}return m;};
+function diffRoads(a,b){const A=roadLens(a),B=roadLens(b);return [...A].filter(([n,L])=>L>=200&&(B.get(n)||0)<L*0.3).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([n,L])=>({n,L}));}
 function renderMyRoute(){
   const el=$('myroute'); $('routeHint').hidden=!!myRoute;
   if(!myRoute){el.innerHTML='';return;}
   if(myRoute.t==null){el.innerHTML='<p class="note">도착지를 누르세요.</p>';return;}
-  const r=myRoute.r,b=myRoute.base,nu=myRoute.noU;
-  if(!r){el.innerHTML='<div class="detour" style="border-color:var(--red)">산사태 통제 가능 구간을 피해서 갈 수 있는 길이 없습니다.</div>';return;}
-  const warnL=r.es.reduce((s,h)=>s+(lvl[h>>1]===1&&eU[h>>1]<0?eLen[h>>1]:0),0);
-  const kma=rainMode==='kma'&&KMA, dep=myRoute.dep||0, durH=Math.max(1,Math.ceil(r.t/3600));
-  const overlap=myRoute.hv.slice(dep,dep+durH+1).some(v=>v);
-  const mx=Math.max(1,...myRoute.rain);
-  const strip=kma?`<div style="margin-top:8px;font-size:12px">경로 주변 ${myRoute.nd}개 동의 시간당 예보 (가장 많은 동 기준)</div><div class="strip">${myRoute.rain.map((v,i)=>`<i class="${myRoute.hv[i]?'h2':v>0?'h1':''}${i>=dep&&i<=dep+durH-1?' dep':''}" style="height:${Math.max(6,v/mx*100)}%" title="${hourLabel(i)} ${v.toFixed(1)}mm"></i>`).join('')}</div><div class="stripx"><span>${hourLabel(0)}</span><span>${hourLabel(myRoute.rain.length-1)}</span></div>
-  <div class="row" style="margin-top:6px;align-items:center"><label for="dep" style="font-size:12.5px">출발 예정</label><select id="dep" style="font:inherit;font-size:12.5px">${myRoute.rain.map((_,i)=>`<option value="${i}"${i===dep?' selected':''}>${hourLabel(i)}</option>`).join('')}</select></div>
-  <div style="margin-top:4px;font-weight:700;color:${overlap?'var(--amber)':'var(--ok)'}">${overlap?'이 시각에 출발하면 강한 비 시간대와 겹칩니다.':myRoute.win?'이 시각 출발이면 강한 비 시간대를 피합니다.':'경로 주변에 강한 비 예보가 없습니다.'}</div>`:'';
-  const uList=myRoute.uOn.length?`<ol class="uol">${myRoute.uOn.map(k=>{const q=uInfo[k];return `<li><b>${esc(UP[k].nm)}</b> <small>${DG[UP[k].d].nm} · ${q.heavy?'강한 비 '+winLabel(q.w):'강한 비 예보 없음'}${q.low?' · 참고: 주변보다 낮음':''}</small></li>`;}).join('')}</ol>`:'';
+  const r=myRoute.r,b=myRoute.base,nu=myRoute.noU,raw=myRoute.raw;
+  if(!r){el.innerHTML='<div class="alt"><b>산사태 통제 가능 구간을 피해서 갈 수 있는 길이 없습니다.</b><br>출발을 미루거나 현장 안내를 따르세요.</div>';return;}
+  const sn=esc(myRoute.sn||'지도에서 고른 곳'), tn=esc(myRoute.tn||'지도에서 고른 곳');
+  const hz=myRoute.hz||[], warn=hz.filter(z=>z.warn), nU=hz.filter(z=>z.t==='u').length, nL=hz.filter(z=>z.t==='l').length;
+  const lv=warn.length?'l1':hz.length?'l0':'ok';
+  const verdict=warn.length?`주의할 곳 ${warn.length}곳`:hz.length?`확인할 지하차도 ${nU}곳`:'이 경로엔 주의할 곳이 없어요';
+  const verdictSub=warn.length?'아래 번호가 붙은 구간을 지날 때 조심하세요.':hz.length?'지금은 강한 비 예보가 없어요. 출발 직전 통제 정보만 확인하세요.':'산사태 위험 구간과 지하차도를 지나지 않아요.';
+  // 대신 이 길로
   let alt='';
-  if(myRoute.uOn.length||myRoute.avoid){
-    const ref=myRoute.avoid?b:nu;
-    alt=`<label style="display:flex;gap:6px;align-items:center;margin-top:8px;font-size:12.5px"><input type="checkbox" id="avoidU"${myRoute.avoid?' checked':''}> 지하차도를 모두 피하는 길로 보기</label>`+
-      (myRoute.avoid&&!nu?'<div class="note">지하차도를 모두 피해서 갈 수 있는 길이 없습니다.</div>':
-       ref?`<div class="note" style="margin-top:2px">${myRoute.avoid?'지하차도를 지나는 기본 경로':'지하차도를 피하는 길'}: ${km(ref.L)}, 약 ${mins(ref.t)} (지금 경로보다 ${ref.t>=r.t?'+':'−'}${mins(Math.abs(ref.t-r.t))})</div>`:'<div class="note">지하차도를 모두 피해서 갈 수 있는 길은 없습니다.</div>');
-  }
-  el.innerHTML=`<div class="detour"><b>${myRoute.avoid&&nu?'지하차도를 피하는 길':myRoute.hit?'산사태 통제 가능 구간을 피해 우회합니다':'기본 경로'}</b><br>${km(r.L)}, 약 ${mins(r.t)}${myRoute.hit&&myRoute.raw?` (원래 길 ${km(myRoute.raw.L)}, ${mins(myRoute.raw.t)})`:''}
-  <div class="rc"><div><span>경로 위 지하차도</span><b>${myRoute.uOn.length}개소</b></div><div><span>강한 비 집중</span><b>${myRoute.win?winLabel(myRoute.win):'예보 없음'}</b></div><div><span>공식 통제 정보</span><b>확인 필요</b></div></div>
-  ${uList}${strip}${alt}
-  <ol>${routeSummary(r).map(s=>`<li>${s.n} ${km(s.L)}</li>`).join('')}</ol>${warnL>=50?`<div style="color:var(--amber);font-weight:700">경로 중 ${km(warnL)}는 산사태 주의 구간입니다.</div>`:''}</div>${ofcHTML()}`;
-  const ds=$('dep'); if(ds)ds.onchange=()=>{myRoute.dep=+ds.value;renderMyRoute();};
-  const av=$('avoidU'); if(av)av.onchange=()=>{myRoute.avoid=av.checked;calcMyRoute();renderMyRoute();draw();};
+  if(myRoute.hit&&raw){const bad=[...new Set(raw.es.filter(h=>lvl[h>>1]===2).map(h=>roadName(h>>1)))].slice(0,3), via=diffRoads(r,raw), dt=r.t-raw.t;
+    alt+=`<div class="alt"><div class="at">⛔ 산사태 통제 가능 구간을 피해 돌아가요</div><div class="ln"><span>피할 길</span><s>${bad.map(esc).join(', ')}</s></div><div class="ln"><span>대신</span><b class="via">${via.length?via.map(v=>esc(v.n)+' '+km(v.L)).join(' → '):'주변 도로'}</b></div><div class="ln"><span>차이</span>${dt>30?'약 '+mins(dt)+' 더 걸려요':'시간 차이 거의 없어요'} · 지도의 회색 점선이 원래 길이에요</div></div>`;}
+  if(!myRoute.avoid&&nU&&nu){const via=diffRoads(nu,r), dt=nu.t-r.t;
+    alt+=`<div class="alt u"><div class="at">지하차도를 피하고 싶다면</div><div class="ln"><span>피할 곳</span><s>${myRoute.uOn.map(k=>esc(UP[k].nm)).join(', ')}</s></div><div class="ln"><span>대신</span><b class="via">${via.length?via.map(v=>esc(v.n)+' '+km(v.L)).join(' → '):'주변 도로'}</b></div><div class="ln"><span>차이</span>${dt>30?'약 '+mins(dt)+' 더 걸려요':'시간 차이 거의 없어요'}</div><button type="button" class="btn" id="avoidBtn">이 길로 안내받기</button></div>`;}
+  else if(myRoute.avoid){alt+=`<div class="alt u"><div class="at">지하차도를 피하는 길로 안내 중</div>${b?`<div class="ln"><span>원래 길</span>${km(b.L)}, 약 ${mins(b.t)}</div>`:''}<button type="button" class="btn" id="avoidBtn">원래 길로 돌아가기</button></div>`;}
+  else if(myRoute.avoid===false&&nU&&!nu){alt+='<div class="alt u"><div class="at">지하차도를 모두 피하는 길은 없어요</div></div>';}
+  const hzRow=z=>{if(z.t==='u'){const q=uInfo[z.k],u=UP[z.k];return `<div class="hzr${z.warn?' warn':''}" data-z="${z.no}"><span class="no">${z.no}</span><b>${esc(u.nm)} 통과</b><small>${q&&q.heavy?'강한 비 '+winLabel(q.w)+' · 물이 고여 있으면 들어가지 마세요':'강한 비 예보 없음 · 통과 전 공식 통제 확인'}${q&&q.low?' · 주변보다 낮은 곳':''}</small></div>`;}
+    return `<div class="hzr warn" data-z="${z.no}"><span class="no">${z.no}</span><b>산사태 주의 구간 ${km(z.L)}</b><small>비탈면 옆 도로예요. 서행하며 낙석·토사를 살피세요.</small></div>`;};
+  const steps=(myRoute.steps||[]).map(g=>`<li class="st${g.hz.some(z=>z.warn)?' hz':''}"><i></i><div><b>${esc(g.n)}</b> <small>${km(g.L)} · ${esc(g.d)}</small>${g.hz.map(hzRow).join('')}</div></li>`).join('');
+  const kma=rainMode==='kma'&&KMA, dep=myRoute.dep||0, durH=Math.max(1,Math.ceil(r.t/3600));
+  const overlap=myRoute.hv.slice(dep,dep+durH+1).some(v=>v), mx=Math.max(1,...myRoute.rain);
+  const strip=kma?`<details class="rainx"><summary>출발 시간과 비 <span class="${overlap?'w':''}">${overlap?'강한 비와 겹침':myRoute.win?'강한 비 피함':'강한 비 없음'}</span></summary><div class="strip">${myRoute.rain.map((v,i)=>`<i class="${myRoute.hv[i]?'h2':v>0?'h1':''}${i>=dep&&i<=dep+durH-1?' dep':''}" style="height:${Math.max(6,v/mx*100)}%" title="${hourLabel(i)} ${v.toFixed(1)}mm"></i>`).join('')}</div><div class="stripx"><span>${hourLabel(0)}</span><span>${hourLabel(myRoute.rain.length-1)}</span></div>
+  <div class="row" style="margin-top:6px"><label for="dep" style="font-size:12.5px">출발 예정</label><select id="dep" style="font:inherit;font-size:12.5px">${myRoute.rain.map((_,i)=>`<option value="${i}"${i===dep?' selected':''}>${hourLabel(i)}</option>`).join('')}</select></div><p class="note">경로 주변 ${myRoute.nd}개 동 중 비가 가장 많은 동 기준이에요.</p></details>`:'';
+  el.innerHTML=`<div class="nav"><div class="navhead ${lv}"><div class="big">${verdict}</div><div class="vs">${verdictSub}</div><div class="meta">${sn} → ${tn} · ${km(r.L)} · 약 ${mins(r.t)}</div>
+  <div class="c3"><span>지하차도 ${nU}</span><span>산사태 주의 ${nL}</span><span>강한 비 ${myRoute.win?winLabel(myRoute.win):'없음'}</span></div></div>
+  ${alt}<ol class="steps"><li class="st start"><i></i><div><b>출발</b> <small>${sn}</small></div></li>${steps}<li class="st end"><i></i><div><b>도착</b> <small>${tn}</small></div></li></ol>${strip}</div>${ofcHTML()}`;
+  const ds=$('dep'); if(ds)ds.onchange=()=>{myRoute.dep=+ds.value;renderMyRoute();const d=el.querySelector('.rainx');if(d)d.open=true;};
+  const av=$('avoidBtn'); if(av)av.onclick=()=>{myRoute.avoid=!myRoute.avoid;calcMyRoute();renderMyRoute();if(myRoute.r)zoomTo([],myRoute.r);draw();};
+  el.querySelectorAll('.hzr').forEach(d=>d.onclick=()=>{const z=hz.find(z=>z.no===+d.dataset.z);if(z){const p=600;fit(z.x-p,z.y-p,z.x+p,z.y+p,40);}});
 }
 function renderHist(){
   const all=allHist();
@@ -793,7 +888,7 @@ async function doSearch(){
   const list=(L,k)=>L.length>1?`<div style="margin-top:6px;font-size:12px;font-weight:700">${k==='s'?'출발':'도착'} 다른 후보</div>`+L.slice(1).map((o,i)=>`<button type="button" class="pick" data-k="${k}" data-i="${i+1}">${esc(o.nm)} <small>${esc(o.sub)}</small></button>`).join(''):'';
   const show=()=>{res.innerHTML=`<p class="note" style="margin-top:2px"><b>출발</b> ${esc(pickSel.s.nm)} → <b>도착</b> ${esc(pickSel.t.nm)}</p>`+list(A,'s')+list(B,'t');
     res.querySelectorAll('.pick').forEach(b=>b.onclick=()=>{pickSel[b.dataset.k]=(b.dataset.k==='s'?A:B)[+b.dataset.i];go();});};
-  const go=()=>{setMode(null);myRoute={s:nearestVert(pickSel.s.x,pickSel.s.y),t:nearestVert(pickSel.t.x,pickSel.t.y)};calcMyRoute();renderMyRoute();
+  const go=()=>{setMode(null);myRoute={s:nearestVert(pickSel.s.x,pickSel.s.y),t:nearestVert(pickSel.t.x,pickSel.t.y),sn:pickSel.s.nm,tn:pickSel.t.nm};calcMyRoute();renderMyRoute();
     if(myRoute.r)zoomTo([],myRoute.r);draw();show();};
   go();
 }
@@ -808,6 +903,10 @@ function tabCounts(){const nu=UP.map((u,k)=>k).filter(k=>uVisible(k)&&uInfo[k].h
 function refresh(){evaluate();renderRain();renderList();renderU();tabCounts();renderHist();if(myRoute&&myRoute.t!=null)calcMyRoute();renderMyRoute();draw();}
 
 /* ---------- 시작 ---------- */
+function setBase(m){baseMode=m;try{localStorage.setItem('yr-base',m);}catch(e){}document.querySelectorAll('.basesw button').forEach(b=>b.classList.toggle('on',b.dataset.b===m));$('attr').textContent=BASE[m]?BASE[m].attr:'';draw();}
+document.querySelectorAll('.basesw button').forEach(b=>b.onclick=()=>setBase(b.dataset.b));
+setBase(baseMode);
+window.dbgTile={llScr,t2ll,ll2t,tileOk:()=>tileOk,setBase};
 $('uAll').onchange=e=>{uAll=e.target.checked;renderU();draw();};
 readColors();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{readColors();draw();});
